@@ -49,12 +49,12 @@ export const verifyOTP = (identifier, otp) => {
   return { valid: true, message: 'OTP verified' };
 };
 
-// For debugging (optional)
-export const getOTPInfo = (identifier) => {
-  return otpStore.get(identifier);
-};
-
 // Generate random OTP
 export const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// For debugging (optional)
+export const getOTPInfo = (identifier) => {
+  return otpStore.get(identifier);
 };
