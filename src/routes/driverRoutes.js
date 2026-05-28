@@ -11,7 +11,61 @@ const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// ============ OTP ROUTES ============
+// ============ SPECIFIC ROUTES (MUST COME FIRST) ============
+
+// GET /api/drivers/ - List all available endpoints
+router.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Driver API is working',
+    endpoints: {
+      GET: {
+        '/': 'List all endpoints',
+        '/all': 'Get all drivers'
+      },
+      POST: {
+        '/send-otp': 'Send OTP to driver phone',
+        '/verify-otp': 'Verify OTP code',
+        '/': 'Create new driver',
+        '/create': 'Create new driver (alternative)',
+        '/update-location': 'Update driver location'
+      },
+      PUT: {
+        '/:id': 'Update driver by ID'
+      },
+      DELETE: {
+        '/:id': 'Delete driver by ID'
+      }
+    }
+  });
+});
+
+// GET /api/drivers/all - Get all drivers
+router.get('/all', async (req, res) => {
+  try {
+    console.log('📦 Fetching all drivers...');
+    
+    const result = await pool.query(`
+      SELECT id, name, email, phone, vehicle_number, vehicle_type,
+             is_active, rating, total_deliveries, created_at,
+             current_latitude, current_longitude, last_location_update
+      FROM drivers
+      ORDER BY id DESC
+    `);
+    
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('Error fetching drivers:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
 
 // POST /api/drivers/send-otp
 router.post('/send-otp', async (req, res) => {
@@ -29,7 +83,7 @@ router.post('/send-otp', async (req, res) => {
     const otp = generateOTP();
     otpStore.set(phone, { 
       otp, 
-      expiresAt: Date.now() + 10 * 60000 // 10 minutes expiry
+      expiresAt: Date.now() + 10 * 60000
     });
     
     console.log(`✅ OTP for ${phone}: ${otp}`);
@@ -37,7 +91,7 @@ router.post('/send-otp', async (req, res) => {
     res.json({
       success: true,
       message: 'OTP sent successfully',
-      devOTP: otp // Remove in production
+      devOTP: otp
     });
   } catch (error) {
     console.error('Send OTP error:', error);
@@ -85,17 +139,14 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
     
-    // OTP verified - delete it
     otpStore.delete(phone);
     
-    // Check if driver exists in database
     const driverResult = await pool.query(
       'SELECT id, name, email, phone, vehicle_number, vehicle_type, is_active, rating, total_deliveries FROM drivers WHERE phone = $1',
       [phone]
     );
     
     if (driverResult.rows.length === 0) {
-      // New user - needs registration
       return res.json({
         success: true,
         isNewUser: true,
@@ -103,7 +154,6 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
     
-    // Existing user - login successful
     res.json({
       success: true,
       isNewUser: false,
@@ -119,63 +169,6 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-// ============ DRIVER CRUD ROUTES ============
-
-// GET /api/drivers/ - List all available endpoints
-router.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Driver API is working',
-    endpoints: {
-      GET: {
-        '/': 'List all endpoints',
-        '/all': 'Get all drivers',
-        '/:id': 'Get driver by ID'
-      },
-      POST: {
-        '/send-otp': 'Send OTP to driver phone',
-        '/verify-otp': 'Verify OTP code',
-        '/': 'Create new driver',
-        '/create': 'Create new driver (alternative)',
-        '/update-location': 'Update driver location'
-      },
-      PUT: {
-        '/:id': 'Update driver by ID'
-      },
-      DELETE: {
-        '/:id': 'Delete driver by ID'
-      }
-    }
-  });
-});
-
-// GET /api/drivers/all - Get all drivers
-router.get('/all', async (req, res) => {
-  try {
-    console.log('📦 Fetching all drivers...');
-    
-    const result = await pool.query(`
-      SELECT id, name, email, phone, vehicle_number, vehicle_type,
-             is_active, rating, total_deliveries, created_at,
-             current_latitude, current_longitude, last_location_update
-      FROM drivers
-      ORDER BY id DESC
-    `);
-    
-    res.json({
-      success: true,
-      data: result.rows,
-      count: result.rows.length
-    });
-  } catch (error) {
-    console.error('Error fetching drivers:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
 // POST /api/drivers/ - Create new driver
 router.post('/', async (req, res) => {
   try {
@@ -183,7 +176,6 @@ router.post('/', async (req, res) => {
     
     const { name, email, phone, vehicle_number, vehicle_type, is_active } = req.body;
     
-    // Validate required fields
     if (!name || !phone) {
       return res.status(400).json({
         success: false,
@@ -191,7 +183,6 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Check if driver already exists
     const existingDriver = await pool.query(
       'SELECT id FROM drivers WHERE phone = $1',
       [phone]
@@ -204,7 +195,6 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Insert new driver
     const result = await pool.query(
       `INSERT INTO drivers (name, email, phone, vehicle_number, vehicle_type, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -272,6 +262,42 @@ router.post('/create', async (req, res) => {
     });
   }
 });
+
+// POST /api/drivers/update-location - Update driver's current location
+router.post('/update-location', async (req, res) => {
+  try {
+    const { driverId, latitude, longitude } = req.body;
+    
+    if (!driverId || !latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver ID, latitude, and longitude are required'
+      });
+    }
+    
+    await pool.query(
+      `UPDATE drivers 
+       SET current_latitude = $1, 
+           current_longitude = $2, 
+           last_location_update = NOW()
+       WHERE id = $3`,
+      [latitude, longitude, driverId]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Location updated successfully'
+    });
+  } catch (error) {
+    console.error('Update location error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============ DYNAMIC ROUTES (WITH :id PARAMETERS - MUST COME LAST) ============
 
 // GET /api/drivers/:id - Get driver by ID
 router.get('/:id', async (req, res) => {
@@ -371,40 +397,6 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Delete driver error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-// POST /api/drivers/update-location - Update driver's current location
-router.post('/update-location', async (req, res) => {
-  try {
-    const { driverId, latitude, longitude } = req.body;
-    
-    if (!driverId || !latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        message: 'Driver ID, latitude, and longitude are required'
-      });
-    }
-    
-    await pool.query(
-      `UPDATE drivers 
-       SET current_latitude = $1, 
-           current_longitude = $2, 
-           last_location_update = NOW()
-       WHERE id = $3`,
-      [latitude, longitude, driverId]
-    );
-    
-    res.json({
-      success: true,
-      message: 'Location updated successfully'
-    });
-  } catch (error) {
-    console.error('Update location error:', error);
     res.status(500).json({
       success: false,
       message: error.message
