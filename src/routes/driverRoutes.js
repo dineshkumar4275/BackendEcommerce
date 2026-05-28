@@ -3,28 +3,36 @@ import pool from '../config/database.js';
 
 const router = express.Router();
 
-// ============ GET ALL DRIVERS (ADD THIS) ============
-router.get('/all', async (req, res) => {
+// ============ TEST ROUTE ============
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Driver routes are working!'
+  });
+});
+
+// ============ GET ALL DRIVERS ============
+router.get('/', async (req, res) => {
   try {
     console.log('📦 Fetching all drivers...');
     
     const query = `
       SELECT 
-        d.id,
-        d.name,
-        d.email,
-        d.phone,
-        d.vehicle_number,
-        d.vehicle_type,
-        d.is_active,
-        d.rating,
-        d.total_deliveries,
-        d.current_latitude,
-        d.current_longitude,
-        d.last_location_update,
-        d.created_at
-      FROM drivers d
-      ORDER BY d.id DESC
+        id,
+        name,
+        email,
+        phone,
+        vehicle_number,
+        vehicle_type,
+        is_active,
+        rating,
+        total_deliveries,
+        current_latitude,
+        current_longitude,
+        last_location_update,
+        created_at
+      FROM drivers
+      ORDER BY id DESC
     `;
     
     const result = await pool.query(query);
@@ -44,25 +52,125 @@ router.get('/all', async (req, res) => {
   }
 });
 
+// ============ GET ALL DRIVERS (ALTERNATIVE ENDPOINT) ============
+router.get('/all', async (req, res) => {
+  try {
+    console.log('📦 Fetching all drivers (/all endpoint)...');
+    
+    const query = `
+      SELECT 
+        id,
+        name,
+        email,
+        phone,
+        vehicle_number,
+        vehicle_type,
+        is_active,
+        rating,
+        total_deliveries,
+        current_latitude,
+        current_longitude,
+        last_location_update,
+        created_at
+      FROM drivers
+      ORDER BY id DESC
+    `;
+    
+    const result = await pool.query(query);
+    
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+      message: 'Drivers fetched successfully'
+    });
+  } catch (error) {
+    console.error('Error fetching drivers:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============ CREATE DRIVER ============
+router.post('/create', async (req, res) => {
+  try {
+    console.log('📝 Creating new driver...');
+    console.log('Request body:', req.body);
+    
+    const {
+      name,
+      email,
+      phone,
+      vehicle_number,
+      vehicle_type
+    } = req.body;
+    
+    // Validate required fields
+    if (!name || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and phone are required fields'
+      });
+    }
+    
+    // Check if driver already exists
+    const existingDriver = await pool.query(
+      'SELECT id FROM drivers WHERE phone = $1 OR email = $2',
+      [phone, email]
+    );
+    
+    if (existingDriver.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver with this phone or email already exists'
+      });
+    }
+    
+    // Insert new driver
+    const result = await pool.query(
+      `INSERT INTO drivers (name, email, phone, vehicle_number, vehicle_type, is_active, rating, total_deliveries)
+       VALUES ($1, $2, $3, $4, $5, true, 5.0, 0)
+       RETURNING *`,
+      [name, email || null, phone, vehicle_number || null, vehicle_type || 'bike']
+    );
+    
+    console.log('✅ Driver created:', result.rows[0]);
+    
+    res.status(201).json({
+      success: true,
+      data: result.rows[0],
+      message: 'Driver created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating driver:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 // ============ GET ACTIVE DRIVERS ============
 router.get('/active', async (req, res) => {
   try {
     const query = `
       SELECT 
-        d.id,
-        d.name,
-        d.phone,
-        d.vehicle_number,
-        d.vehicle_type,
-        d.rating,
-        d.current_latitude,
-        d.current_longitude,
-        d.last_location_update
-      FROM drivers d
-      WHERE d.is_active = true
-        AND d.current_latitude IS NOT NULL
-        AND d.last_location_update > NOW() - INTERVAL '5 minutes'
-      ORDER BY d.last_location_update DESC
+        id,
+        name,
+        phone,
+        vehicle_number,
+        vehicle_type,
+        rating,
+        current_latitude,
+        current_longitude,
+        last_location_update
+      FROM drivers
+      WHERE is_active = true
+        AND current_latitude IS NOT NULL
+        AND last_location_update > NOW() - INTERVAL '5 minutes'
+      ORDER BY last_location_update DESC
     `;
     
     const result = await pool.query(query);
@@ -88,12 +196,21 @@ router.get('/:id', async (req, res) => {
     
     const query = `
       SELECT 
-        d.*,
-        COUNT(ot.id) as total_orders
-      FROM drivers d
-      LEFT JOIN orders ot ON ot.driver_id = d.id
-      WHERE d.id = $1
-      GROUP BY d.id
+        id,
+        name,
+        email,
+        phone,
+        vehicle_number,
+        vehicle_type,
+        is_active,
+        rating,
+        total_deliveries,
+        current_latitude,
+        current_longitude,
+        last_location_update,
+        created_at
+      FROM drivers
+      WHERE id = $1
     `;
     
     const result = await pool.query(query, [id]);
@@ -123,10 +240,26 @@ router.post('/update-location', async (req, res) => {
   try {
     const { driverId, latitude, longitude, orderId } = req.body;
     
+    console.log('📍 Updating location for driver:', driverId);
+    console.log('📍 Location:', { latitude, longitude });
+    
     if (!driverId || !latitude || !longitude) {
       return res.status(400).json({
         success: false,
         message: 'Driver ID, latitude, and longitude are required'
+      });
+    }
+    
+    // Check if driver exists
+    const driverCheck = await pool.query(
+      'SELECT id FROM drivers WHERE id = $1',
+      [driverId]
+    );
+    
+    if (driverCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Driver not found'
       });
     }
     
@@ -196,38 +329,6 @@ router.get('/location/:driverId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting driver location:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-// ============ CREATE DRIVER ============
-router.post('/create', async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      phone,
-      vehicle_number,
-      vehicle_type
-    } = req.body;
-    
-    const result = await pool.query(
-      `INSERT INTO drivers (name, email, phone, vehicle_number, vehicle_type, is_active)
-       VALUES ($1, $2, $3, $4, $5, true)
-       RETURNING *`,
-      [name, email, phone, vehicle_number, vehicle_type]
-    );
-    
-    res.status(201).json({
-      success: true,
-      data: result.rows[0],
-      message: 'Driver created successfully'
-    });
-  } catch (error) {
-    console.error('Error creating driver:', error);
     res.status(500).json({
       success: false,
       message: error.message
