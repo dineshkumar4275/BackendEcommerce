@@ -1,44 +1,43 @@
 import express from 'express';
 import pool from '../config/database.js';
-import { saveOTP, verifyOTP, generateOTP } from '../utils/otpStore.js';
 
 const router = express.Router();
 
-// ============ OTP ROUTES - MUST BE AT THE TOP ============
+// Simple OTP store (in-memory for development)
+const otpStore = new Map();
 
-// POST /api/drivers/send-otp - Send OTP to driver
+// Generate 6-digit OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// ============ OTP ROUTES ============
+
+// POST /api/drivers/send-otp
 router.post('/send-otp', async (req, res) => {
   try {
-    console.log('📧 Sending OTP request:', req.body);
-    const { phone, email } = req.body;
+    console.log('📧 Send OTP request:', req.body);
+    const { phone } = req.body;
     
-    // Use phone or email as identifier (phone is primary for driver app)
-    const identifier = phone || email;
-    
-    if (!identifier) {
+    if (!phone) {
       return res.status(400).json({
         success: false,
-        message: 'Phone number or email is required'
+        message: 'Phone number is required'
       });
     }
     
-    // Generate 6-digit OTP
     const otp = generateOTP();
+    otpStore.set(phone, { 
+      otp, 
+      expiresAt: Date.now() + 10 * 60000 // 10 minutes expiry
+    });
     
-    // Store OTP
-    saveOTP(identifier, otp);
-    
-    // For development, log the OTP (in production, send via SMS/Email)
-    console.log(`✅ OTP for ${identifier}: ${otp}`);
-    
-    // TODO: Integrate SMS service here (Twilio, MSG91, etc.)
-    // await sendSMS(phone, `Your OTP is: ${otp}`);
+    console.log(`✅ OTP for ${phone}: ${otp}`);
     
     res.json({
       success: true,
       message: 'OTP sent successfully',
-      // Remove devOTP in production - only for testing
-      devOTP: otp
+      devOTP: otp // Remove in production
     });
   } catch (error) {
     console.error('Send OTP error:', error);
@@ -49,47 +48,54 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-// POST /api/drivers/verify-otp - Verify OTP
+// POST /api/drivers/verify-otp
 router.post('/verify-otp', async (req, res) => {
   try {
-    console.log('🔐 Verifying OTP:', req.body);
-    const { phone, email, otp } = req.body;
+    console.log('🔐 Verify OTP request:', req.body);
+    const { phone, otp } = req.body;
     
-    // Use phone or email as identifier
-    const identifier = phone || email;
-    
-    if (!identifier || !otp) {
+    if (!phone || !otp) {
       return res.status(400).json({
         success: false,
-        message: 'Identifier (phone/email) and OTP are required'
+        message: 'Phone and OTP are required'
       });
     }
     
-    const verification = verifyOTP(identifier, otp);
+    const record = otpStore.get(phone);
     
-    if (!verification.valid) {
+    if (!record) {
       return res.status(400).json({
         success: false,
-        message: verification.message
+        message: 'OTP not found or expired'
       });
     }
+    
+    if (record.expiresAt < Date.now()) {
+      otpStore.delete(phone);
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired'
+      });
+    }
+    
+    if (record.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP'
+      });
+    }
+    
+    // OTP verified - delete it
+    otpStore.delete(phone);
     
     // Check if driver exists in database
-    let driverResult;
-    if (phone) {
-      driverResult = await pool.query(
-        'SELECT * FROM drivers WHERE phone = $1',
-        [phone]
-      );
-    } else {
-      driverResult = await pool.query(
-        'SELECT * FROM drivers WHERE email = $1',
-        [email]
-      );
-    }
+    const driverResult = await pool.query(
+      'SELECT id, name, email, phone, vehicle_number, vehicle_type, is_active, rating, total_deliveries FROM drivers WHERE phone = $1',
+      [phone]
+    );
     
     if (driverResult.rows.length === 0) {
-      // New user - need to complete registration
+      // New user - needs registration
       return res.json({
         success: true,
         isNewUser: true,
@@ -113,88 +119,45 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-// ============ POST /api/drivers - Create driver (Alternative to /create) ============
-router.post('/', async (req, res) => {
-  try {
-    console.log('📝 POST /api/drivers - Creating driver');
-    console.log('Request body:', req.body);
-    
-    const { name, email, phone, vehicle_number, vehicle_type, is_available } = req.body;
-    
-    // Validate required fields
-    if (!name || !phone) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name and phone are required fields'
-      });
-    }
-    
-    // Check if driver exists
-    const existingDriver = await pool.query(
-      'SELECT id FROM drivers WHERE phone = $1',
-      [phone]
-    );
-    
-    if (existingDriver.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Driver with this phone already exists'
-      });
-    }
-    
-    // Insert driver
-    const result = await pool.query(
-      `INSERT INTO drivers (name, email, phone, vehicle_number, vehicle_type, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [name, email || null, phone, vehicle_number || null, vehicle_type || 'bike', is_available !== false]
-    );
-    
-    res.status(201).json({
-      success: true,
-      data: result.rows[0],
-      message: 'Driver created successfully'
-    });
-  } catch (error) {
-    console.error('Create driver error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
+// ============ DRIVER CRUD ROUTES ============
 
-// ============ GET /api/drivers - List all routes ============
+// GET /api/drivers/ - List all available endpoints
 router.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Driver API is working',
     endpoints: {
       GET: {
-        '/': 'List all driver endpoints',
+        '/': 'List all endpoints',
         '/all': 'Get all drivers',
-        '/active': 'Get active drivers',
         '/:id': 'Get driver by ID'
       },
       POST: {
+        '/send-otp': 'Send OTP to driver phone',
+        '/verify-otp': 'Verify OTP code',
         '/': 'Create new driver',
         '/create': 'Create new driver (alternative)',
-        '/send-otp': 'Send OTP to driver',
-        '/verify-otp': 'Verify OTP',
         '/update-location': 'Update driver location'
+      },
+      PUT: {
+        '/:id': 'Update driver by ID'
+      },
+      DELETE: {
+        '/:id': 'Delete driver by ID'
       }
     }
   });
 });
 
-// ============ GET /api/drivers/all - Get all drivers ============
+// GET /api/drivers/all - Get all drivers
 router.get('/all', async (req, res) => {
   try {
     console.log('📦 Fetching all drivers...');
     
     const result = await pool.query(`
       SELECT id, name, email, phone, vehicle_number, vehicle_type,
-             is_active, rating, total_deliveries, created_at
+             is_active, rating, total_deliveries, created_at,
+             current_latitude, current_longitude, last_location_update
       FROM drivers
       ORDER BY id DESC
     `);
@@ -213,21 +176,22 @@ router.get('/all', async (req, res) => {
   }
 });
 
-// ============ POST /api/drivers/create - Create driver ============
-router.post('/create', async (req, res) => {
+// POST /api/drivers/ - Create new driver
+router.post('/', async (req, res) => {
   try {
-    console.log('📝 POST /api/drivers/create - Creating driver');
-    console.log('Request body:', req.body);
+    console.log('📝 Creating driver:', req.body);
     
-    const { name, email, phone, vehicle_number, vehicle_type, is_available } = req.body;
+    const { name, email, phone, vehicle_number, vehicle_type, is_active } = req.body;
     
+    // Validate required fields
     if (!name || !phone) {
       return res.status(400).json({
         success: false,
-        message: 'Name and phone are required'
+        message: 'Name and phone are required fields'
       });
     }
     
+    // Check if driver already exists
     const existingDriver = await pool.query(
       'SELECT id FROM drivers WHERE phone = $1',
       [phone]
@@ -236,15 +200,16 @@ router.post('/create', async (req, res) => {
     if (existingDriver.rows.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Driver with this phone already exists'
+        message: 'Driver with this phone number already exists'
       });
     }
     
+    // Insert new driver
     const result = await pool.query(
       `INSERT INTO drivers (name, email, phone, vehicle_number, vehicle_type, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [name, email || null, phone, vehicle_number || null, vehicle_type || 'bike', is_available !== false]
+       RETURNING id, name, email, phone, vehicle_number, vehicle_type, is_active, created_at`,
+      [name, email || null, phone, vehicle_number || null, vehicle_type || 'bike', is_active !== false]
     );
     
     res.status(201).json({
@@ -261,13 +226,64 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// ============ GET /api/drivers/:id - Get driver by ID ============
+// POST /api/drivers/create - Alternative create driver endpoint
+router.post('/create', async (req, res) => {
+  try {
+    console.log('📝 Creating driver (alternative):', req.body);
+    
+    const { name, email, phone, vehicle_number, vehicle_type, is_active } = req.body;
+    
+    if (!name || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and phone are required'
+      });
+    }
+    
+    const existingDriver = await pool.query(
+      'SELECT id FROM drivers WHERE phone = $1',
+      [phone]
+    );
+    
+    if (existingDriver.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver with this phone number already exists'
+      });
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO drivers (name, email, phone, vehicle_number, vehicle_type, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, email, phone, vehicle_number, vehicle_type, is_active, created_at`,
+      [name, email || null, phone, vehicle_number || null, vehicle_type || 'bike', is_active !== false]
+    );
+    
+    res.status(201).json({
+      success: true,
+      data: result.rows[0],
+      message: 'Driver created successfully'
+    });
+  } catch (error) {
+    console.error('Create driver error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// GET /api/drivers/:id - Get driver by ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
     const result = await pool.query(
-      'SELECT * FROM drivers WHERE id = $1',
+      `SELECT id, name, email, phone, vehicle_number, vehicle_type, is_active, 
+              rating, total_deliveries, created_at, updated_at,
+              current_latitude, current_longitude, last_location_update
+       FROM drivers 
+       WHERE id = $1`,
       [id]
     );
     
@@ -283,6 +299,7 @@ router.get('/:id', async (req, res) => {
       data: result.rows[0]
     });
   } catch (error) {
+    console.error('Get driver error:', error);
     res.status(500).json({
       success: false,
       message: error.message
@@ -290,7 +307,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ============ PUT /api/drivers/:id - Update driver ============
+// PUT /api/drivers/:id - Update driver
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -306,7 +323,7 @@ router.put('/:id', async (req, res) => {
            is_active = COALESCE($6, is_active),
            updated_at = NOW()
        WHERE id = $7
-       RETURNING *`,
+       RETURNING id, name, email, phone, vehicle_number, vehicle_type, is_active, updated_at`,
       [name, email, phone, vehicle_number, vehicle_type, is_active, id]
     );
     
@@ -323,6 +340,7 @@ router.put('/:id', async (req, res) => {
       message: 'Driver updated successfully'
     });
   } catch (error) {
+    console.error('Update driver error:', error);
     res.status(500).json({
       success: false,
       message: error.message
@@ -330,13 +348,13 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// ============ DELETE /api/drivers/:id - Delete driver ============
+// DELETE /api/drivers/:id - Delete driver
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
     const result = await pool.query(
-      'DELETE FROM drivers WHERE id = $1 RETURNING *',
+      'DELETE FROM drivers WHERE id = $1 RETURNING id',
       [id]
     );
     
@@ -352,6 +370,7 @@ router.delete('/:id', async (req, res) => {
       message: 'Driver deleted successfully'
     });
   } catch (error) {
+    console.error('Delete driver error:', error);
     res.status(500).json({
       success: false,
       message: error.message
@@ -359,23 +378,33 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// ============ POST /api/drivers/update-location ============
+// POST /api/drivers/update-location - Update driver's current location
 router.post('/update-location', async (req, res) => {
   try {
     const { driverId, latitude, longitude } = req.body;
     
+    if (!driverId || !latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver ID, latitude, and longitude are required'
+      });
+    }
+    
     await pool.query(
       `UPDATE drivers 
-       SET current_latitude = $1, current_longitude = $2, last_location_update = NOW()
+       SET current_latitude = $1, 
+           current_longitude = $2, 
+           last_location_update = NOW()
        WHERE id = $3`,
       [latitude, longitude, driverId]
     );
     
     res.json({
       success: true,
-      message: 'Location updated'
+      message: 'Location updated successfully'
     });
   } catch (error) {
+    console.error('Update location error:', error);
     res.status(500).json({
       success: false,
       message: error.message
