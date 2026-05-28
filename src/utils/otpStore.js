@@ -7,34 +7,35 @@ const otpStore = new Map();
 // Clean up expired OTPs every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [email, data] of otpStore.entries()) {
+  for (const [identifier, data] of otpStore.entries()) {
     if (data.expiresAt < now) {
-      otpStore.delete(email);
-      console.log(`🗑️ Cleaned expired OTP for ${email}`);
+      otpStore.delete(identifier);
+      console.log(`🗑️ Cleaned expired OTP for ${identifier}`);
     }
   }
 }, 5 * 60 * 1000);
 
-export const saveOTP = (email, otp) => {
-  // OTP expires in 10 minutes
-  otpStore.set(email, {
+// Save OTP using phone or email as identifier
+export const saveOTP = (identifier, otp) => {
+  otpStore.set(identifier, {
     otp,
     expiresAt: Date.now() + 10 * 60 * 1000,
     createdAt: Date.now()
   });
-  console.log(`💾 OTP saved for ${email}: ${otp} (expires in 10 min)`);
+  console.log(`💾 OTP saved for ${identifier}: ${otp} (expires in 10 min)`);
   return true;
 };
 
-export const verifyOTP = (email, otp) => {
-  const record = otpStore.get(email);
+// Verify OTP
+export const verifyOTP = (identifier, otp) => {
+  const record = otpStore.get(identifier);
   
   if (!record) {
     return { valid: false, message: 'OTP not found or expired' };
   }
   
   if (record.expiresAt < Date.now()) {
-    otpStore.delete(email);
+    otpStore.delete(identifier);
     return { valid: false, message: 'OTP has expired' };
   }
   
@@ -43,12 +44,17 @@ export const verifyOTP = (email, otp) => {
   }
   
   // OTP verified successfully, delete it
-  otpStore.delete(email);
-  console.log(`✅ OTP verified for ${email}`);
+  otpStore.delete(identifier);
+  console.log(`✅ OTP verified for ${identifier}`);
   return { valid: true, message: 'OTP verified' };
 };
 
 // For debugging (optional)
-export const getOTPInfo = (email) => {
-  return otpStore.get(email);
+export const getOTPInfo = (identifier) => {
+  return otpStore.get(identifier);
+};
+
+// Generate random OTP
+export const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 };

@@ -1,7 +1,117 @@
 import express from 'express';
 import pool from '../config/database.js';
+import { saveOTP, verifyOTP, generateOTP } from '../utils/otpStore.js';
 
 const router = express.Router();
+
+// ============ OTP ROUTES - MUST BE AT THE TOP ============
+
+// POST /api/drivers/send-otp - Send OTP to driver
+router.post('/send-otp', async (req, res) => {
+  try {
+    console.log('📧 Sending OTP request:', req.body);
+    const { phone, email } = req.body;
+    
+    // Use phone or email as identifier (phone is primary for driver app)
+    const identifier = phone || email;
+    
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number or email is required'
+      });
+    }
+    
+    // Generate 6-digit OTP
+    const otp = generateOTP();
+    
+    // Store OTP
+    saveOTP(identifier, otp);
+    
+    // For development, log the OTP (in production, send via SMS/Email)
+    console.log(`✅ OTP for ${identifier}: ${otp}`);
+    
+    // TODO: Integrate SMS service here (Twilio, MSG91, etc.)
+    // await sendSMS(phone, `Your OTP is: ${otp}`);
+    
+    res.json({
+      success: true,
+      message: 'OTP sent successfully',
+      // Remove devOTP in production - only for testing
+      devOTP: otp
+    });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// POST /api/drivers/verify-otp - Verify OTP
+router.post('/verify-otp', async (req, res) => {
+  try {
+    console.log('🔐 Verifying OTP:', req.body);
+    const { phone, email, otp } = req.body;
+    
+    // Use phone or email as identifier
+    const identifier = phone || email;
+    
+    if (!identifier || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Identifier (phone/email) and OTP are required'
+      });
+    }
+    
+    const verification = verifyOTP(identifier, otp);
+    
+    if (!verification.valid) {
+      return res.status(400).json({
+        success: false,
+        message: verification.message
+      });
+    }
+    
+    // Check if driver exists in database
+    let driverResult;
+    if (phone) {
+      driverResult = await pool.query(
+        'SELECT * FROM drivers WHERE phone = $1',
+        [phone]
+      );
+    } else {
+      driverResult = await pool.query(
+        'SELECT * FROM drivers WHERE email = $1',
+        [email]
+      );
+    }
+    
+    if (driverResult.rows.length === 0) {
+      // New user - need to complete registration
+      return res.json({
+        success: true,
+        isNewUser: true,
+        message: 'OTP verified successfully. Please complete registration.'
+      });
+    }
+    
+    // Existing user - login successful
+    res.json({
+      success: true,
+      isNewUser: false,
+      driver: driverResult.rows[0],
+      message: 'Login successful'
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
 
 // ============ POST /api/drivers - Create driver (Alternative to /create) ============
 router.post('/', async (req, res) => {
@@ -69,6 +179,8 @@ router.get('/', (req, res) => {
       POST: {
         '/': 'Create new driver',
         '/create': 'Create new driver (alternative)',
+        '/send-otp': 'Send OTP to driver',
+        '/verify-otp': 'Verify OTP',
         '/update-location': 'Update driver location'
       }
     }
@@ -93,7 +205,7 @@ router.get('/all', async (req, res) => {
       count: result.rows.length
     });
   } catch (error) {
-    console.error('Error deleting driver:', error);
+    console.error('Error fetching drivers:', error);
     res.status(500).json({
       success: false,
       message: error.message
