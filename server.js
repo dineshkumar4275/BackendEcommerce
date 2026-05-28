@@ -334,6 +334,7 @@
 // server.listen(PORT, () => {
 //   console.log(`🚀 Server Running On Port ${PORT}`);
 // });
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -357,17 +358,22 @@ dotenv.config();
 const app = express();
 
 // CORS
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'https://frontend-ecommerce-six-self.vercel.app',
-    'https://backend-ecommerce-five-dun.vercel.app'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// CORS
+app.use(
+  cors({
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:8081', // Expo Web
+      'http://192.168.1.2:8081', // Expo LAN
+      'https://frontend-ecommerce-six-self.vercel.app',
+      'https://backend-ecommerce-five-dun.vercel.app'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
 
 // Middleware
 app.use(express.json());
