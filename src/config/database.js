@@ -1,45 +1,24 @@
-// import pkg from 'pg';
-// import dotenv from 'dotenv';
-
-// dotenv.config();
-
-// const { Pool } = pkg;
-
-// // PostgreSQL connection pool
-// const pool = new Pool({
-//   user: process.env.DB_USER,
-//   host: process.env.DB_HOST,
-//   database: process.env.DB_NAME,
-//   password: process.env.DB_PASSWORD,
-//   port: parseInt(process.env.DB_PORT),
-//   ssl: false,
-//   max: 20,
-//   idleTimeoutMillis: 30000,
-//   connectionTimeoutMillis: 2000,
-// });
-
-// // Test database connection
-// pool.connect()
-//   .then((client) => {
-//     console.log('✅ Database connected successfully');
-//     client.release();
-//   })
-//   .catch((err) => {
-//     console.error('❌ Database connection error:', err.message);
-//   });
-
-// export default pool;
-import pkg from "pg";
+import pkg from 'pg';
 const { Pool } = pkg;
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-  max: 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  ssl: process.env.NODE_ENV === 'production' 
+    ? { rejectUnauthorized: false }  // For production (Vercel)
+    : false,                          // For local development
+});
+
+// Test connection
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('❌ Database connection error:', err.message);
+  } else {
+    console.log('✅ Database connected successfully');
+    release();
+  }
 });
 
 export default pool;
