@@ -28,7 +28,11 @@ router.post('/', async (req, res) => {
     if (existingDriver.rows.length > 0) {
       return res.status(400).json({
         success: false,
+<<<<<<< HEAD
         message: 'Driver with this phone already exists'
+=======
+        message: 'Driver not found'
+>>>>>>> a429dcfe3acf92dbf9b34a02bda7f05cf9148bf4
       });
     }
     
@@ -93,6 +97,7 @@ router.get('/all', async (req, res) => {
       count: result.rows.length
     });
   } catch (error) {
+    console.error('Error deleting driver:', error);
     res.status(500).json({
       success: false,
       message: error.message
