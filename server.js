@@ -454,183 +454,144 @@
 
 // // For Vercel
 // export default app;
-// "// Force redeploy" 
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import dashboardRoutes from './routes/dashboardRoutes.js';
-import productRoutes from './routes/productRoutes.js';
-import driverRoutes from './routes/driverRoutes.js';
-import authRoutes from './routes/authRoutes.js';
-import orderRoutes from './routes/orderRoutes.js';
-import trackingRoutes from './routes/trackingRoutes.js';
-import wishlistRoutes from './routes/wishlistRoutes.js';
-import razorpayRoutes from './routes/razorpayRoutes.js';
-import userRoutes from './routes/userRoutes.js';
-import notificationRoutes from './routes/notificationRoutes.js';
-import adminRoutes from './routes/adminRoutes.js';
-
-dotenv.config();
 
 const app = express();
 
-// ============ CORS CONFIGURATION ============
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  
-  'https://your-frontend.vercel.app',
-  'https://your-driver-app.vercel.app',
-  'exp://localhost:19000',
-  'exp://localhost:19001'
-];
+// Basic middleware
+app.use(cors());
+app.use(express.json());
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-      callback(null, true);
-    } else {
-      console.log('Blocked origin:', origin);
-      callback(null, true); // Allow all in development
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Access-Control-Allow-Origin',
-    'Access-Control-Allow-Headers',
-    'Access-Control-Allow-Methods'
-  ],
-  exposedHeaders: ['Content-Length', 'X-Total-Count'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
-
-// Handle preflight requests
-app.options('*', cors());
-
-// ============ MIDDLEWARE ============
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Request logging
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  console.log('Headers:', req.headers);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log('Body:', req.body);
-  }
-  next();
-});
-
-// ============ HEALTH CHECK ============
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
-// ============ ROOT ROUTE ============
+// Simple routes
 app.get('/', (req, res) => {
-  res.status(200).json({
-    success: true,
+  res.json({ 
+    success: true, 
     message: 'Ecommerce Backend Running 🚀',
-    version: '1.0.0',
     endpoints: {
-      'GET /': 'API Information',
-      'GET /health': 'Health Check',
-      'GET /api/test': 'Test Endpoint',
-      'GET /api/drivers': 'Driver API Info',
-      'POST /api/drivers/send-otp': 'Send OTP to Driver',
-      'POST /api/drivers/verify-otp': 'Verify OTP Code',
-      'GET /api/drivers/all': 'Get All Drivers',
-      'GET /api/products': 'Get All Products',
-      'GET /api/orders': 'Get All Orders'
-    },
-    documentation: 'https://github.com/your-repo',
-    support: 'support@yourdomain.com'
+      'POST /api/drivers/send-otp': 'Send OTP to driver',
+      'POST /api/drivers/verify-otp': 'Verify OTP code'
+    }
   });
 });
 
-// ============ API TEST ROUTE ============
 app.get('/api/test', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'API is working!',
-    timestamp: new Date().toISOString()
-  });
+  res.json({ success: true, message: 'API is working!' });
 });
 
-// ============ API ROUTES ============
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/drivers', driverRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/tracking', trackingRoutes);
-app.use('/api/wishlist', wishlistRoutes);
-app.use('/api/razorpay', razorpayRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/admin', adminRoutes);
+// OTP storage (in-memory)
+const otpStore = new Map();
 
-// ============ 404 HANDLER ============
-app.use((req, res) => {
-  console.log(`❌ 404 Not Found: ${req.method} ${req.url}`);
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+// Send OTP endpoint
+app.post('/api/drivers/send-otp', (req, res) => {
+  try {
+    const { email, phone } = req.body;
+    const identifier = email || phone;
+    
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email or phone number is required'
+      });
+    }
+    
+    const otp = generateOTP();
+    otpStore.set(identifier, { otp, expiresAt: Date.now() + 10 * 60000 });
+    
+    console.log(`✅ OTP for ${identifier}: ${otp}`);
+    
+    res.json({
+      success: true,
+      message: 'OTP sent successfully',
+      devOTP: otp
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Verify OTP endpoint
+app.post('/api/drivers/verify-otp', (req, res) => {
+  try {
+    const { email, phone, otp } = req.body;
+    const identifier = email || phone;
+    
+    if (!identifier || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Identifier and OTP are required'
+      });
+    }
+    
+    const record = otpStore.get(identifier);
+    
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP not found or expired'
+      });
+    }
+    
+    if (record.expiresAt < Date.now()) {
+      otpStore.delete(identifier);
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired'
+      });
+    }
+    
+    if (record.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP'
+      });
+    }
+    
+    otpStore.delete(identifier);
+    
+    res.json({
+      success: true,
+      message: 'OTP verified successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// 404 handler
+app.use('*', (req, res) => {
   res.status(404).json({
     success: false,
-    error: 'Not Found',
-    message: `Cannot ${req.method} ${req.url}`,
-    availableEndpoints: [
-      'GET /',
-      'GET /health',
-      'GET /api/test',
-      'GET /api/drivers',
-      'POST /api/drivers/send-otp',
-      'POST /api/drivers/verify-otp',
-      'GET /api/drivers/all',
-      'GET /api/products',
-      'GET /api/orders'
-    ]
+    message: `Route ${req.method} ${req.url} not found`
   });
 });
 
-// ============ GLOBAL ERROR HANDLER ============
+// Error handler
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err);
-  console.error('Stack:', err.stack);
-  
-  const status = err.status || 500;
-  const message = err.message || 'Internal Server Error';
-  
-  res.status(status).json({
+  console.error('Error:', err);
+  res.status(500).json({
     success: false,
-    error: message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    message: err.message
   });
 });
 
-// ============ START SERVER (Local Development) ============
 const PORT = process.env.PORT || 5000;
 
+// For local development
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📡 API available at http://localhost:${PORT}/api`);
-    console.log(`✅ Health check at http://localhost:${PORT}/health`);
   });
 }
 
-// ============ EXPORT FOR VERCEL ============
+// For Vercel
 export default app;
