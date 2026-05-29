@@ -102,7 +102,9 @@ router.get('/earnings', async (req, res) => {
     const result = await pool.query(`
       SELECT 
         COUNT(*) AS total_orders,
-        COALESCE(SUM(total_amount),0) AS total_earnings
+        COALESCE(SUM(total_amount),0) AS total_earnings,
+        COALESCE(SUM(CASE WHEN DATE(created_at) = CURRENT_DATE THEN total_amount ELSE 0 END),0) AS today_earnings,
+        COUNT(CASE WHEN DATE(created_at) = CURRENT_DATE THEN 1 END) AS today_count
       FROM orders
       WHERE driver_id = $1
       AND status = 'delivered'
@@ -142,6 +144,100 @@ router.get('/all', async (req, res) => {
 
   } catch (error) {
 
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// =========================
+// UPDATE PUSH TOKEN (FOR REAL-TIME NOTIFICATIONS)
+// =========================
+router.post('/update-push-token', async (req, res) => {
+  try {
+    const { driver_id, push_token } = req.body;
+    
+    if (!driver_id || !push_token) {
+      return res.status(400).json({
+        success: false,
+        message: 'driver_id and push_token required'
+      });
+    }
+    
+    await pool.query(
+      `UPDATE drivers 
+       SET push_token = $1, updated_at = NOW() 
+       WHERE id = $2 AND (push_token IS DISTINCT FROM $1 OR push_token IS NULL)`,
+      [push_token, driver_id]
+    );
+    
+    console.log(`✅ Push token updated for driver ${driver_id}`);
+    
+    res.json({
+      success: true,
+      message: 'Push token saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Update push token error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// =========================
+// UPDATE AVAILABILITY (FOR REAL-TIME NOTIFICATIONS)
+// =========================
+router.post('/update-availability', async (req, res) => {
+  try {
+    const { driver_id, is_available } = req.body;
+    
+    await pool.query(
+      `UPDATE drivers 
+       SET is_available = $1, updated_at = NOW() 
+       WHERE id = $2`,
+      [is_available, driver_id]
+    );
+    
+    console.log(`📱 Driver ${driver_id} availability: ${is_available ? 'ONLINE' : 'OFFLINE'}`);
+    
+    res.json({
+      success: true,
+      message: `Driver is now ${is_available ? 'online' : 'offline'}`
+    });
+    
+  } catch (error) {
+    console.error('Update availability error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// =========================
+// GET DRIVER NOTIFICATIONS
+// =========================
+router.get('/:driverId/notifications', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    
+    const result = await pool.query(`
+      SELECT * FROM driver_notifications 
+      WHERE driver_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 50
+    `, [driverId]);
+    
+    res.json({
+      success: true,
+      data: result.rows
+    });
+    
+  } catch (error) {
     res.status(500).json({
       success: false,
       message: error.message
@@ -296,16 +392,18 @@ router.post('/', async (req, res) => {
         email,
         phone,
         vehicle_number,
-        vehicle_type
+        vehicle_type,
+        is_available
       )
-      VALUES ($1,$2,$3,$4,$5)
+      VALUES ($1,$2,$3,$4,$5, $6)
       RETURNING *
     `, [
       name,
       cleanEmail,
       phone || null,
       vehicle_number || null,
-      vehicle_type || 'bike'
+      vehicle_type || 'bike',
+      false  // Default offline
     ]);
 
     res.status(201).json({
@@ -411,7 +509,8 @@ router.put('/:id', async (req, res) => {
       phone,
       vehicle_number,
       vehicle_type,
-      is_active
+      is_active,
+      is_available
     } = req.body;
 
     const result = await pool.query(`
@@ -423,8 +522,9 @@ router.put('/:id', async (req, res) => {
         vehicle_number = COALESCE($4, vehicle_number),
         vehicle_type = COALESCE($5, vehicle_type),
         is_active = COALESCE($6, is_active),
+        is_available = COALESCE($7, is_available),
         updated_at = NOW()
-      WHERE id = $7
+      WHERE id = $8
       RETURNING *
     `, [
       name,
@@ -433,6 +533,7 @@ router.put('/:id', async (req, res) => {
       vehicle_number,
       vehicle_type,
       is_active,
+      is_available,
       id
     ]);
 
