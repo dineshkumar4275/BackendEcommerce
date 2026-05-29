@@ -366,7 +366,7 @@ app.use(
       'http://localhost:3001',
       'http://localhost:8081', // Expo Web
       'http://192.168.1.2:8081', // Expo LAN
-      'https://frontend-ecommerce-six-self.vercel.app',
+'https://frontend-ecommerce-pink.vercel.app',
       'https://backend-ecommerce-five-dun.vercel.app'
     ],
     credentials: true,
