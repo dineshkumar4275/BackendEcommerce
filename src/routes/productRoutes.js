@@ -182,12 +182,32 @@ router.get('/:id', async (req, res) => {
 // Create product
 router.post('/', async (req, res) => {
   try {
-    const { 
-      name, description, price, stock, category, 
-      image_url, image_url_2, image_url_3, image_url_4, image_url_5,
-      brand, model, warranty, weight, dimensions, material, features,
-      is_featured, compare_price
-    } = req.body;
+    const {
+  name,
+  description,
+  price,
+  stock,
+  category,
+  image_url,
+  image_url_2,
+  image_url_3,
+  image_url_4,
+  image_url_5,
+  brand,
+  model,
+  warranty,
+  weight,
+  dimensions,
+  material,
+  features,
+  is_featured,
+  compare_price,
+
+  has_colors,
+  colors,
+  has_sizes,
+  sizes
+} = req.body;
     
     const result = await pool.query(
       `INSERT INTO products (
@@ -230,22 +250,63 @@ router.put('/:id', async (req, res) => {
     } = req.body;
     
     const result = await pool.query(
-      `UPDATE products 
-       SET name = $1, description = $2, price = $3, stock = $4, category = $5,
-           image_url = $6, image_url_2 = $7, image_url_3 = $8, image_url_4 = $9, image_url_5 = $10,
-           brand = $11, model = $12, warranty = $13, weight = $14, dimensions = $15, 
-           material = $16, features = $17, is_featured = $18, compare_price = $19,
-           updated_at = NOW()
-       WHERE id = $20 
-       RETURNING *`,
-      [
-        name, description, price, stock, category,
-        image_url, image_url_2 || null, image_url_3 || null, image_url_4 || null, image_url_5 || null,
-        brand || null, model || null, warranty || null, weight || null, dimensions || null, 
-        material || null, features || null, is_featured || false, compare_price || null,
-        productId
-      ]
-    );
+  `
+  UPDATE products
+  SET
+      name = $1,
+      description = $2,
+      price = $3,
+      stock = $4,
+      category = $5,
+      image_url = $6,
+      image_url_2 = $7,
+      image_url_3 = $8,
+      image_url_4 = $9,
+      image_url_5 = $10,
+      brand = $11,
+      model = $12,
+      warranty = $13,
+      weight = $14,
+      dimensions = $15,
+      material = $16,
+      features = $17,
+      is_featured = $18,
+      compare_price = $19,
+      has_colors = $20,
+      colors = $21,
+      has_sizes = $22,
+      sizes = $23,
+      updated_at = NOW()
+  WHERE id = $24
+  RETURNING *
+  `,
+  [
+    name,
+    description,
+    price,
+    stock,
+    category,
+    image_url,
+    image_url_2,
+    image_url_3,
+    image_url_4,
+    image_url_5,
+    brand,
+    model,
+    warranty,
+    weight,
+    dimensions,
+    material,
+    features,
+    is_featured,
+    compare_price,
+    has_colors,
+    JSON.stringify(colors || []),
+    has_sizes,
+    JSON.stringify(sizes || []),
+    productId
+  ]
+);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Product not found' });
