@@ -242,13 +242,27 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid product ID format' });
     }
     
-    const { 
-      name, description, price, stock, category, 
-      image_url, image_url_2, image_url_3, image_url_4, image_url_5,
-      brand, model, warranty, weight, dimensions, material, features,
-      is_featured, compare_price
-    } = req.body;
-    
+   const {
+  name,
+  description,
+  price,
+  stock,
+  category,
+  image_url,
+  image_url_2,
+  image_url_3,
+  image_url_4,
+  image_url_5,
+  brand,
+  model,
+  warranty,
+  weight,
+  dimensions,
+  material,
+  features,
+  is_featured,
+  compare_price
+} = req.body;
     const result = await pool.query(
   `
   UPDATE products
