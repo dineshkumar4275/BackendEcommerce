@@ -111,29 +111,71 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
     const productId = parseInt(id);
-    
+
     if (isNaN(productId)) {
-      return res.status(400).json({ success: false, message: 'Invalid product ID format' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID'
+      });
     }
-    
+
     const result = await pool.query(
-      `SELECT id, name, description, price, stock, category, 
-              image_url, image_url_2, image_url_3, image_url_4, image_url_5,
-              created_at 
-       FROM products 
-       WHERE id = $1`,
+      `
+      SELECT
+        id,
+        name,
+        description,
+        price,
+        compare_price,
+        category,
+        brand,
+        stock,
+        image_url,
+        image_url_2,
+        image_url_3,
+        image_url_4,
+        image_url_5,
+        rating,
+        review_count,
+        is_featured,
+        has_colors,
+        colors,
+        has_sizes,
+        sizes,
+        model,
+        warranty,
+        weight,
+        dimensions,
+        material,
+        features,
+        created_at
+      FROM products
+      WHERE id = $1
+      `,
       [productId]
     );
-    
+
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
     }
-    
-    res.json({ success: true, data: result.rows[0] });
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+
   } catch (error) {
-    console.error('Error fetching product:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Get Product Error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 });
 
