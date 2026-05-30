@@ -261,7 +261,12 @@ router.put('/:id', async (req, res) => {
   material,
   features,
   is_featured,
-  compare_price
+  compare_price,
+
+  has_colors,
+  colors,
+  has_sizes,
+  sizes
 } = req.body;
     const result = await pool.query(
   `
