@@ -25,27 +25,33 @@ dotenv.config();
 const app = express();
 
 // ============================================
-// ✅ FIXED CORS CONFIGURATION
+// ✅ FIXED CORS - Allow all origins for development
 // ============================================
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:8081',
-  'http://192.168.1.2:8081',
-  'https://frontend-ecommerce-pink.vercel.app',
-  'https://backend-ecommerce-five-dun.vercel.app',
-  'https://api.sombu.in',
-  'https://www.sombu.in',
-  'https://sombu.in',
-];
-
 app.use(
   cors({
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
-      if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      // Allow all origins in development
+      if (process.env.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      
+      // Production allowed origins
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:8081',
+        'http://192.168.1.2:8081',
+        'https://frontend-ecommerce-pink.vercel.app',
+        'https://backend-ecommerce-five-dun.vercel.app',
+        'https://api.sombu.in',
+        'https://www.sombu.in',
+        'https://sombu.in',
+      ];
+      
+      if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
         console.log('❌ Blocked by CORS:', origin);
@@ -62,10 +68,11 @@ app.use(
       'Origin',
       'Access-Control-Allow-Origin',
       'Access-Control-Allow-Headers',
-      'Access-Control-Allow-Methods'
+      'Access-Control-Allow-Methods',
+      'Access-Control-Allow-Credentials'
     ],
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    maxAge: 86400, // 24 hours
+    maxAge: 86400,
     preflightContinue: false,
     optionsSuccessStatus: 204
   })
@@ -74,15 +81,22 @@ app.use(
 // ✅ Handle preflight requests explicitly
 app.options('*', cors());
 
-// Middleware
+// ✅ Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// ✅ Log all requests (for debugging)
+// ✅ Log all requests with origin
 app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.url}`);
   console.log('  Origin:', req.headers.origin || 'No origin');
   console.log('  IP:', req.ip || req.socket?.remoteAddress);
+  
+  // ✅ Set CORS headers for all responses (safety net)
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  
   next();
 });
 
@@ -91,13 +105,7 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Ecommerce Backend Running 🚀',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      health: '/api/health',
-      products: '/api/products',
-      location: '/api/location',
-      auth: '/api/auth'
-    }
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -150,9 +158,6 @@ console.log('  ✅ /api/admin');
 // ✅ Location routes
 app.use('/api/location', locationRoutes);
 console.log('  ✅ /api/location');
-console.log('    - GET /api/location/detect');
-console.log('    - GET /api/location/reverse');
-console.log('    - GET /api/location/search/:query');
 
 console.log('✅ All routes registered successfully!');
 
@@ -161,24 +166,7 @@ app.use('*', (req, res) => {
   console.log(`❌ 404: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
-    message: `Route ${req.originalUrl} not found`,
-    availableRoutes: [
-      '/api/health',
-      '/api/products',
-      '/api/auth',
-      '/api/location/detect',
-      '/api/location/reverse',
-      '/api/location/search/:query',
-      '/api/orders',
-      '/api/drivers',
-      '/api/wishlist',
-      '/api/razorpay',
-      '/api/admin',
-      '/api/dashboard',
-      '/api/tracking',
-      '/api/users',
-      '/api/notifications'
-    ]
+    message: `Route ${req.originalUrl} not found`
   });
 });
 
