@@ -16,8 +16,6 @@ import razorpayRoutes from './src/routes/razorpayRoutes.js';
 import userRoutes from './src/routes/userRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 import adminRoutes from './src/routes/adminRoutes.js';
-
-// ✅ Import location routes
 import locationRoutes from './src/routes/locationRoutes.js';
 
 dotenv.config();
@@ -25,86 +23,93 @@ dotenv.config();
 const app = express();
 
 // ============================================
-// ✅ FIXED CORS - Allow all origins for development
+// ✅ COMPLETE CORS CONFIGURATION
 // ============================================
 const allowedOrigins = [
+  // Local development
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:8081',
   'http://192.168.1.2:8081',
-  'https://frontend-ecommerce-pink.vercel.app',
-  'https://frontend-ecommerce-six-self.vercel.app',
+  
+  // Production domains
   'https://sombu.in',
   'https://www.sombu.in',
   'https://api.sombu.in',
   'https://sombustore.in',
   'https://www.sombustore.in',
   'https://sombu-store.vercel.app',
+  'https://frontend-ecommerce-pink.vercel.app',
+  'https://frontend-ecommerce-six-self.vercel.app',
 ];
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      
-      // Allow all origins in development
-      if (process.env.NODE_ENV === 'development') {
-        return callback(null, true);
-      }
-      
-      // Check if origin is allowed
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        console.log('❌ Blocked by CORS:', origin);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'Accept',
-      'Origin',
-      'Access-Control-Allow-Origin',
-      'Access-Control-Allow-Headers',
-      'Access-Control-Allow-Methods',
-      'Access-Control-Allow-Credentials'
-    ],
-    exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    maxAge: 86400,
-    preflightContinue: false,
-    optionsSuccessStatus: 204
-  })
-);
+// ✅ Main CORS middleware
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Allow all in development
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // Check if origin is allowed
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked for origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Headers',
+    'Access-Control-Allow-Methods',
+    'Access-Control-Allow-Credentials'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
 
 // ✅ Handle preflight requests explicitly
 app.options('*', cors());
 
-// ✅ Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// ✅ Log all requests with origin (for debugging)
+// ✅ Additional CORS headers middleware (safety net)
 app.use((req, res, next) => {
-  console.log(`📨 ${req.method} ${req.url}`);
-  console.log('  Origin:', req.headers.origin || 'No origin');
-  console.log('  IP:', req.ip || req.socket?.remoteAddress);
-  
-  // ✅ Set CORS headers for all responses (safety net)
   const origin = req.headers.origin;
-  if (origin) {
+  
+  // Set CORS headers for all responses
+  if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
   }
+  
+  // Log all requests for debugging
+  console.log(`📨 ${req.method} ${req.url}`);
+  console.log(`  Origin: ${origin || 'No origin'}`);
+  console.log(`  IP: ${req.ip || req.socket?.remoteAddress}`);
   
   next();
 });
+
+// ✅ Middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Root route
 app.get('/', (req, res) => {
@@ -112,7 +117,10 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Ecommerce Backend Running 🚀',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    cors: {
+      allowedOrigins: allowedOrigins
+    }
   });
 });
 
@@ -162,12 +170,8 @@ console.log('  ✅ /api/notifications');
 app.use('/api/admin', adminRoutes);
 console.log('  ✅ /api/admin');
 
-// ✅ Location routes
 app.use('/api/location', locationRoutes);
 console.log('  ✅ /api/location');
-console.log('    - GET /api/location/detect');
-console.log('    - GET /api/location/reverse');
-console.log('    - GET /api/location/search/:query');
 
 console.log('✅ All routes registered successfully!');
 
@@ -189,7 +193,8 @@ app.use((err, req, res, next) => {
     return res.status(403).json({
       success: false,
       message: 'CORS error: Origin not allowed',
-      origin: req.headers.origin
+      origin: req.headers.origin,
+      allowedOrigins: allowedOrigins
     });
   }
   
