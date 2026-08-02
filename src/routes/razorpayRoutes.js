@@ -1,16 +1,26 @@
+// backend/src/routes/razorpayRoutes.js
+
 import express from 'express';
 import {
   createOrder,
   verifyPayment,
   getPaymentDetails,
+  getRazorpayKey,
+  razorpayHealth,
+  refundPayment
 } from '../controllers/razorpayController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js'; // ✅ Fixed import path
 
 const router = express.Router();
 
-// All routes require authentication
-router.post('/create-order', protect, createOrder);
-router.post('/verify-payment', protect, verifyPayment);
-router.get('/payment/:paymentId', protect, getPaymentDetails);
+// ✅ Public routes (no authentication required)
+router.get('/health', razorpayHealth);
+router.get('/key', getRazorpayKey);
+
+// ✅ Protected routes (authentication required)
+router.post('/create-order', authenticateToken, createOrder);
+router.post('/verify-payment', authenticateToken, verifyPayment);
+router.get('/payment/:paymentId', authenticateToken, getPaymentDetails);
+router.post('/refund', authenticateToken, isAdmin, refundPayment);
 
 export default router;

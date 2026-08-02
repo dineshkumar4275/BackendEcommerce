@@ -27,6 +27,21 @@ const app = express();
 // ============================================
 // ✅ FIXED CORS - Allow all origins for development
 // ============================================
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:8081',
+  'http://192.168.1.2:8081',
+  'https://frontend-ecommerce-pink.vercel.app',
+  'https://frontend-ecommerce-six-self.vercel.app',
+  'https://sombu.in',
+  'https://www.sombu.in',
+  'https://api.sombu.in',
+  'https://sombustore.in',
+  'https://www.sombustore.in',
+  'https://sombu-store.vercel.app',
+];
+
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -38,19 +53,7 @@ app.use(
         return callback(null, true);
       }
       
-      // Production allowed origins
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:8081',
-        'http://192.168.1.2:8081',
-        'https://frontend-ecommerce-pink.vercel.app',
-        'https://backend-ecommerce-five-dun.vercel.app',
-        'https://api.sombu.in',
-        'https://www.sombu.in',
-        'https://sombu.in',
-      ];
-      
+      // Check if origin is allowed
       if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
@@ -85,17 +88,20 @@ app.options('*', cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// ✅ Log all requests with origin
+// ✅ Log all requests with origin (for debugging)
 app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.url}`);
   console.log('  Origin:', req.headers.origin || 'No origin');
   console.log('  IP:', req.ip || req.socket?.remoteAddress);
   
   // ✅ Set CORS headers for all responses (safety net)
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  }
   
   next();
 });
@@ -105,7 +111,8 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Ecommerce Backend Running 🚀',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -158,6 +165,9 @@ console.log('  ✅ /api/admin');
 // ✅ Location routes
 app.use('/api/location', locationRoutes);
 console.log('  ✅ /api/location');
+console.log('    - GET /api/location/detect');
+console.log('    - GET /api/location/reverse');
+console.log('    - GET /api/location/search/:query');
 
 console.log('✅ All routes registered successfully!');
 
