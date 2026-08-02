@@ -35,7 +35,7 @@ const allowedOrigins = [
   // Production domains
   'https://sombu.in',
   'https://www.sombu.in',
-  'https://api.sombu.in/api',
+  'https://api.sombu.in',
   'https://sombustore.in',
   'https://www.sombustore.in',
   'https://sombu-store.vercel.app',
