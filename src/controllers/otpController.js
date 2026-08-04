@@ -1,6 +1,7 @@
 // src/controllers/otpController.js
 import pool from '../config/database.js';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 
 // ============================================
 // ✅ SEND OTP
@@ -20,11 +21,11 @@ export const sendOTP = async (req, res) => {
       });
     }
 
-    // Generate OTP
+    // ✅ Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Save to database
+    // ✅ Try to save to database
     try {
       // Create table if not exists
       await pool.query(`
@@ -39,6 +40,7 @@ export const sendOTP = async (req, res) => {
         )
       `);
 
+      // Insert or update OTP
       await pool.query(
         `INSERT INTO otps (contact, type, otp, purpose, expires_at, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())
@@ -49,11 +51,12 @@ export const sendOTP = async (req, res) => {
       console.log('✅ OTP saved to database');
     } catch (dbError) {
       console.error('❌ Database error:', dbError.message);
-      // Continue even if DB fails - OTP still works
+      // Continue - OTP works even without DB
     }
 
     const isDevelopment = process.env.NODE_ENV === 'development';
     
+    // ✅ Send success response with OTP (only in development)
     return res.status(200).json({
       success: true,
       message: 'OTP sent successfully',
@@ -90,7 +93,7 @@ export const verifyOTP = async (req, res) => {
       });
     }
 
-    // ✅ DEVELOPMENT - Accept any OTP
+    // ✅ DEVELOPMENT MODE - Accept any 6-digit OTP
     if (process.env.NODE_ENV === 'development') {
       // Check if user exists
       let userResult = await pool.query(
