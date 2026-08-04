@@ -1,3 +1,4 @@
+// backend/server.js
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -15,9 +16,10 @@ import razorpayRoutes from './src/routes/razorpayRoutes.js';
 import userRoutes from './src/routes/userRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 import adminRoutes from './src/routes/adminRoutes.js';
-
-// ✅ Import location routes
 import locationRoutes from './src/routes/locationRoutes.js';
+
+// ✅ NEW: Import address routes
+import addressRoutes from './src/routes/addressRoutes.js';
 
 dotenv.config();
 
@@ -47,7 +49,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ============ ROUTES - MUST BE IN THIS ORDER ============
+// ============ ROUTES ============
 
 // Root route
 app.get('/', (req, res) => {
@@ -78,9 +80,10 @@ app.use('/api/razorpay', razorpayRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
-
-// ✅ LOCATION ROUTES - Add this line
 app.use('/api/location', locationRoutes);
+
+// ✅ NEW: Address routes
+app.use('/api/address', addressRoutes);
 
 // ============ DEBUG: Log all registered routes ============
 console.log('✅ Registered API Routes:');
@@ -96,13 +99,10 @@ console.log('  - /api/razorpay');
 console.log('  - /api/users');
 console.log('  - /api/notifications');
 console.log('  - /api/admin');
-console.log('  ✅ /api/location');  // ✅ Added this
-console.log('  ✅ /api/location/detect');
-console.log('  ✅ /api/location/search/:query');
-console.log('  ✅ /api/location/by-zip/:zipcode');
-console.log('  ✅ /api/location/nearby');
+console.log('  - /api/location');
+console.log('  ✅ /api/address');  // ✅ NEW
 
-// ============ 404 HANDLER - MUST BE LAST ============
+// ============ 404 HANDLER ============
 app.use('*', (req, res) => {
   console.log(`❌ 404: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
@@ -122,10 +122,7 @@ app.use('*', (req, res) => {
       '/api/notifications',
       '/api/admin',
       '/api/location',
-      '/api/location/detect',
-      '/api/location/search/:query',
-      '/api/location/by-zip/:zipcode',
-      '/api/location/nearby'
+      '/api/address'  // ✅ NEW
     ]
   });
 });
@@ -145,7 +142,7 @@ const PORT = process.env.PORT || 5000;
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📍 Location API: http://localhost:${PORT}/api/location`);
+    console.log(`📍 Address API: http://localhost:${PORT}/api/address`);
   });
 }
 

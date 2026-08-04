@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
+import languageRoutes from './routes/languageRoutes.js';
 // Import routes
 import productRoutes from './src/routes/productRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
@@ -139,7 +140,7 @@ console.log('📦 Registering API Routes...');
 
 app.use('/api/products', productRoutes);
 console.log('  ✅ /api/products');
-
+app.use('/api/language', languageRoutes);
 app.use('/api/auth', authRoutes);
 console.log('  ✅ /api/auth');
 
