@@ -1,13 +1,9 @@
-// server.js
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createServer } from 'http';
+import pool from './src/config/database.js';
 
-// ✅ Load environment variables
-dotenv.config();
-
-// ✅ Import routes
+// Routes
 import productRoutes from './src/routes/productRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
@@ -19,121 +15,100 @@ import razorpayRoutes from './src/routes/razorpayRoutes.js';
 import userRoutes from './src/routes/userRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 import adminRoutes from './src/routes/adminRoutes.js';
+
+// ✅ Import location routes
 import locationRoutes from './src/routes/locationRoutes.js';
-import addressRoutes from './src/routes/addressRoutes.js';
+
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// ============================================
-// ✅ CORS CONFIGURATION - FIXED FOR VERCEL
-// ============================================
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:8081',
-  'https://frontend-ecommerce-pink.vercel.app',
-  'https://backend-ecommerce-five-dun.vercel.app',
-  'https://api.sombu.in',
-  'https://www.sombu.in',
-  'https://sombu.in',
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+// CORS
+app.use(
+  cors({
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:8081',
+      'http://192.168.1.2:8081',
+      'https://frontend-ecommerce-pink.vercel.app',
+      'https://backend-ecommerce-five-dun.vercel.app',
+      'https://api.sombu.in/api',
+      'https://www.sombu.in',
+      'https://sombu.in',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow all origins in development
-    if (process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('❌ CORS blocked for origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Length', 'X-Request-Id'],
-  maxAge: 86400,
-}));
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ✅ Handle preflight requests
-app.options('*', cors());
+// ============ ROUTES - MUST BE IN THIS ORDER ============
 
-// ✅ Body parser middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// ✅ Request logger (for debugging)
-app.use((req, res, next) => {
-  console.log(`📝 ${req.method} ${req.url}`);
-  next();
-});
-
-// ============================================
-// ✅ HEALTH CHECK - Must work for Vercel
-// ============================================
+// Root route
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: '🚀 Sombu Store API is running',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
+    message: 'Ecommerce Backend Running 🚀'
   });
 });
 
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
     status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    environment: process.env.NODE_ENV || 'development'
+    timestamp: new Date().toISOString()
   });
 });
 
-// ============================================
-// ✅ REGISTER ROUTES
-// ============================================
-try {
-  app.use('/api/products', productRoutes);
-  app.use('/api/auth', authRoutes);
-  app.use('/api/dashboard', dashboardRoutes);
-  app.use('/api/orders', orderRoutes);
-  app.use('/api/tracking', trackingRoutes);
-  app.use('/api/drivers', driverRoutes);
-  app.use('/api/wishlist', wishlistRoutes);
-  app.use('/api/razorpay', razorpayRoutes);
-  app.use('/api/users', userRoutes);
-  app.use('/api/notifications', notificationRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/location', locationRoutes);
-  app.use('/api/address', addressRoutes);
-  
-  console.log('✅ All routes registered successfully');
-} catch (error) {
-  console.error('❌ Failed to register routes:', error);
-}
+// ============ REGISTER ALL API ROUTES ============
+app.use('/api/products', productRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/tracking', trackingRoutes);
+app.use('/api/drivers', driverRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/razorpay', razorpayRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 
-// ============================================
-// ✅ 404 HANDLER
-// ============================================
+// ✅ LOCATION ROUTES - Add this line
+app.use('/api/location', locationRoutes);
+
+// ============ DEBUG: Log all registered routes ============
+console.log('✅ Registered API Routes:');
+console.log('  - /api/health');
+console.log('  - /api/products');
+console.log('  - /api/auth');
+console.log('  - /api/dashboard');
+console.log('  - /api/orders');
+console.log('  - /api/tracking');
+console.log('  - /api/drivers');
+console.log('  - /api/wishlist');
+console.log('  - /api/razorpay');
+console.log('  - /api/users');
+console.log('  - /api/notifications');
+console.log('  - /api/admin');
+console.log('  ✅ /api/location');  // ✅ Added this
+console.log('  ✅ /api/location/detect');
+console.log('  ✅ /api/location/search/:query');
+console.log('  ✅ /api/location/by-zip/:zipcode');
+console.log('  ✅ /api/location/nearby');
+
+// ============ 404 HANDLER - MUST BE LAST ============
 app.use('*', (req, res) => {
   console.log(`❌ 404: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     message: `Route ${req.originalUrl} not found`,
     availableRoutes: [
-      '/',
       '/api/health',
       '/api/products',
       '/api/auth',
@@ -147,36 +122,32 @@ app.use('*', (req, res) => {
       '/api/notifications',
       '/api/admin',
       '/api/location',
-      '/api/address'
+      '/api/location/detect',
+      '/api/location/search/:query',
+      '/api/location/by-zip/:zipcode',
+      '/api/location/nearby'
     ]
   });
 });
 
-// ============================================
-// ✅ ERROR HANDLER
-// ============================================
+// ============ ERROR HANDLER ============
 app.use((err, req, res, next) => {
-  console.error('❌ Server Error:', err.stack);
-  res.status(err.status || 500).json({
+  console.error('❌ Error:', err.stack);
+  res.status(500).json({
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    message: err.message || 'Internal Server Error'
   });
 });
 
-// ============================================
-// ✅ START SERVER (for local development)
-// ============================================
+const PORT = process.env.PORT || 5000;
+
+// For local development
 if (process.env.NODE_ENV !== 'production') {
-  const server = createServer(app);
-  server.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📍 Location API: http://localhost:${PORT}/api/location`);
   });
 }
 
-// ============================================
-// ✅ EXPORT FOR VERCEL
-// ============================================
+// For Vercel
 export default app;
