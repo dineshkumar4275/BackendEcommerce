@@ -177,59 +177,51 @@ import languageRoutes from './src/routes/languageRoutes.js';
 const app = express();
 
 // ============================================
-// ✅ COMPLETE CORS FIX - WORKS WITH VERCEL
+// ✅ COMPLETE CORS FIX - MULTIPLE LAYERS
 // ============================================
 
-const allowedOrigins = [
-  // Local development
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:8081',
-  'http://192.168.1.2:8081',
-  
-  // Production domains
-  'https://sombu.in',
-  'https://www.sombu.in',
-  'https://api.sombu.in',
-  'https://sombustore.in',
-  'https://www.sombustore.in',
-  'https://sombu-store.vercel.app',
-  'https://frontend-ecommerce-pink.vercel.app',
-  'https://frontend-ecommerce-six-self.vercel.app',
-  'https://backend-ecommerce-five-dun.vercel.app',
-  // Add your frontend URL
-  process.env.FRONTEND_URL,
-].filter(Boolean);
-
-// ✅ CORS Middleware - HANDLES EVERYTHING
+// ✅ LAYER 1: Raw CORS middleware (BEFORE anything else)
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // ✅ Set CORS headers for ALL requests
-  if (origin && (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development')) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  } else {
-    // Allow all in development or if no origin
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-  
+  // Always set CORS headers for all requests
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
   res.setHeader('Access-Control-Allow-Headers', 
-    'Content-Type, Authorization, X-Requested-With, Accept, Origin, ' +
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, ' +
     'Access-Control-Allow-Origin, Access-Control-Allow-Headers, ' +
     'Access-Control-Allow-Methods, Access-Control-Allow-Credentials'
   );
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
-  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
   
-  // ✅ Handle preflight OPTIONS immediately
+  // ✅ Handle OPTIONS immediately
   if (req.method === 'OPTIONS') {
-    console.log('✅ OPTIONS handled:', req.url);
-    return res.status(204).end();
+    console.log('✅ OPTIONS request handled:', req.url);
+    return res.status(200).end();
   }
   
+  next();
+});
+
+// ✅ LAYER 2: Express CORS middleware (backup)
+app.use(cors({
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Origin', 'X-Requested-With', 'Content-Type', 'Accept', 
+    'Authorization', 'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Headers', 'Access-Control-Allow-Methods'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
+
+// ✅ LAYER 3: Additional CORS headers (safety net)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   next();
 });
 
@@ -269,7 +261,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ✅ Register all routes
+// ✅ Register routes
 console.log('📦 Registering API Routes...');
 
 app.use('/api/products', productRoutes);
@@ -332,15 +324,6 @@ app.use('*', (req, res) => {
 // ============================================
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err.stack);
-  
-  if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({
-      success: false,
-      message: 'CORS error: Origin not allowed',
-      origin: req.headers.origin
-    });
-  }
-  
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal Server Error'
