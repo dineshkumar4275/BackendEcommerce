@@ -24,13 +24,13 @@ export const sendOTP = async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Save OTP to database
+    // Save to database
     try {
       // Create table if not exists
       await pool.query(`
         CREATE TABLE IF NOT EXISTS otps (
           id SERIAL PRIMARY KEY,
-          contact VARCHAR(255) NOT NULL UNIQUE,
+          contact VARCHAR(255) NOT NULL,
           type VARCHAR(20) DEFAULT 'email',
           otp VARCHAR(6) NOT NULL,
           purpose VARCHAR(20) DEFAULT 'login',
@@ -49,7 +49,7 @@ export const sendOTP = async (req, res) => {
       console.log('✅ OTP saved to database');
     } catch (dbError) {
       console.error('❌ Database error:', dbError.message);
-      // Continue even if DB fails
+      // Continue even if DB fails - OTP still works
     }
 
     const isDevelopment = process.env.NODE_ENV === 'development';
@@ -69,8 +69,7 @@ export const sendOTP = async (req, res) => {
     console.error('❌ Send OTP error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to send OTP',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Failed to send OTP'
     });
   }
 };
@@ -91,7 +90,7 @@ export const verifyOTP = async (req, res) => {
       });
     }
 
-    // ✅ DEVELOPMENT MODE - Accept any OTP
+    // ✅ DEVELOPMENT - Accept any OTP
     if (process.env.NODE_ENV === 'development') {
       // Check if user exists
       let userResult = await pool.query(
@@ -138,7 +137,7 @@ export const verifyOTP = async (req, res) => {
       });
     }
 
-    // ✅ PRODUCTION - Verify OTP from database
+    // ✅ PRODUCTION - Verify from database
     const result = await pool.query(
       `SELECT * FROM otps 
        WHERE contact = $1 
@@ -209,8 +208,7 @@ export const verifyOTP = async (req, res) => {
     console.error('❌ Verify OTP error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to verify OTP',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Failed to verify OTP'
     });
   }
 };
@@ -231,11 +229,9 @@ export const resendOTP = async (req, res) => {
       });
     }
 
-    // Generate new OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Update OTP in database
     await pool.query(
       `UPDATE otps 
        SET otp = $1, expires_at = $2, created_at = NOW()
