@@ -2,18 +2,27 @@
 import pool from '../config/database.js';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
-import twilio from 'twilio';
 
 // ============================================
-// ✅ EMAIL TRANSPORTER CONFIGURATION
+// ✅ CREATE EMAIL TRANSPORTER WITH DEBUG
 // ============================================
 let transporter = null;
 
 function getTransporter() {
   if (transporter) return transporter;
 
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn('⚠️ Email credentials not configured.');
+  // ✅ Check if credentials exist
+  const emailUser = process.env.EMAIL_USER;
+  const emailPass = process.env.EMAIL_PASS;
+
+  console.log('📧 Email Config Check:');
+  console.log(`  EMAIL_USER: ${emailUser ? '✅ Set' : '❌ Missing'}`);
+  console.log(`  EMAIL_PASS: ${emailPass ? '✅ Set (length: ' + emailPass.length + ')' : '❌ Missing'}`);
+
+  if (!emailUser || !emailPass) {
+    console.error('❌ Email credentials missing. Please check .env file');
+    console.log('  Required: EMAIL_USER=your_email@gmail.com');
+    console.log('  Required: EMAIL_PASS=your_16_char_app_password');
     return null;
   }
 
@@ -21,40 +30,65 @@ function getTransporter() {
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: emailUser,
+        pass: emailPass,
       },
       tls: {
         rejectUnauthorized: false
-      }
+      },
+      debug: true, // Enable debug
+      logger: true // Enable logging
     });
 
-    console.log('✅ Email transporter configured');
+    console.log('✅ Email transporter created successfully');
     return transporter;
   } catch (error) {
-    console.error('❌ Email config error:', error.message);
+    console.error('❌ Failed to create email transporter:', error.message);
     return null;
   }
 }
 
 // ============================================
-// ✅ SEND EMAIL OTP
+// ✅ VERIFY EMAIL CONFIGURATION
 // ============================================
-async function sendEmailOTP(email, otp, purpose = 'login') {
+async function verifyEmailConfig() {
   try {
     const transporter = getTransporter();
-    
     if (!transporter) {
-      console.log('📧 Email transporter not available');
+      console.log('❌ No transporter available');
       return false;
     }
 
-    const purposeText = {
-      login: 'log in to your account',
-      signup: 'sign up for an account',
-      reset: 'reset your password',
-      admin: 'access the admin dashboard'
-    };
+    // Verify connection
+    await transporter.verify();
+    console.log('✅ Email connection verified successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Email verification failed:', error.message);
+    return false;
+  }
+}
+
+// ============================================
+// ✅ SEND EMAIL OTP - COMPLETE WORKING VERSION
+// ============================================
+async function sendEmailOTP(email, otp, purpose = 'login') {
+  try {
+    console.log(`📧 Attempting to send OTP to ${email}...`);
+    
+    const transporter = getTransporter();
+    
+    if (!transporter) {
+      console.error('❌ No transporter available');
+      return false;
+    }
+
+    // Verify connection first
+    const isVerified = await verifyEmailConfig();
+    if (!isVerified) {
+      console.error('❌ Email connection not verified');
+      return false;
+    }
 
     const isAdmin = email === 'admin@example.com';
 
@@ -84,21 +118,24 @@ async function sendEmailOTP(email, otp, purpose = 'login') {
             margin-top: 8px;
           }
           .content { padding: 40px 30px; }
-          .otp-box { background: #f0f0ff; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0; }
-          .otp-code { font-size: 48px; font-weight: bold; letter-spacing: 10px; color: #6c63ff; }
-          .admin-otp { color: #d63031; }
+          .otp-box { 
+            background: ${isAdmin ? '#fff5f0' : '#f0f0ff'}; 
+            border-radius: 10px; 
+            padding: 20px; 
+            text-align: center; 
+            margin: 20px 0;
+            border: ${isAdmin ? '2px solid #ff6b35' : '2px solid #6c63ff'};
+          }
+          .otp-code { 
+            font-size: 48px; 
+            font-weight: bold; 
+            letter-spacing: 10px; 
+            color: ${isAdmin ? '#d63031' : '#6c63ff'}; 
+          }
           .info { color: #666; font-size: 14px; line-height: 1.6; }
           .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #999; font-size: 12px; }
           .highlight { color: #6c63ff; font-weight: bold; }
           .admin-highlight { color: #d63031; font-weight: bold; }
-          .admin-badge { 
-            display: inline-block; 
-            background: #ff6b35; 
-            color: #fff; 
-            padding: 4px 12px; 
-            border-radius: 20px; 
-            font-size: 12px;
-          }
         </style>
       </head>
       <body>
@@ -110,12 +147,10 @@ async function sendEmailOTP(email, otp, purpose = 'login') {
           <div class="content">
             <p style="font-size: 16px; color: #333;">Hello${isAdmin ? ' Admin' : ''},</p>
             <p style="font-size: 16px; color: #333;">
-              You requested an OTP to <span class="${isAdmin ? 'admin-highlight' : 'highlight'}">
-                ${isAdmin ? 'access the admin dashboard' : purposeText[purpose] || 'authenticate'}
-              </span>.
+              You requested an OTP to ${isAdmin ? 'access the admin dashboard' : 'log in to your account'}.
             </p>
             <div class="otp-box">
-              <div class="otp-code ${isAdmin ? 'admin-otp' : ''}">${otp}</div>
+              <div class="otp-code">${otp}</div>
             </div>
             ${isAdmin ? '<p style="color: #d63031; font-weight: bold;">⚠️ This is an admin login. Keep this OTP secure.</p>' : ''}
             <p class="info">This OTP is valid for <span class="${isAdmin ? 'admin-highlight' : 'highlight'}">10 minutes</span>.</p>
@@ -135,16 +170,24 @@ async function sendEmailOTP(email, otp, purpose = 'login') {
       to: email,
       subject: isAdmin 
         ? `🛡️ Admin OTP for Dashboard Access - Sombu Store` 
-        : `🔐 Your OTP for ${purpose} - Sombu Store`,
-      html: htmlContent
+        : `🔐 Your OTP - Sombu Store`,
+      html: htmlContent,
+      text: `Your OTP is: ${otp}. Valid for 10 minutes.`
     };
 
+    console.log(`📧 Sending email to ${email}...`);
+    console.log(`  From: ${mailOptions.from}`);
+    console.log(`  Subject: ${mailOptions.subject}`);
+
     const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ OTP email sent to ${email}`, info.messageId);
+    console.log(`✅ Email sent successfully!`);
+    console.log(`  Message ID: ${info.messageId}`);
+    console.log(`  Response: ${info.response}`);
     return true;
 
   } catch (error) {
     console.error('❌ Email sending failed:', error.message);
+    console.error('  Error details:', error);
     return false;
   }
 }
@@ -206,7 +249,7 @@ export const sendOTP = async (req, res) => {
     // ✅ Send OTP via email
     let emailSent = false;
     if (type === 'email') {
-      emailSent = await sendEmailOTP(email, otp, isAdmin ? 'admin' : 'login');
+      emailSent = await sendEmailOTP(contact, otp, isAdmin ? 'admin' : 'login');
     }
 
     const isDevelopment = process.env.NODE_ENV === 'development';
@@ -215,8 +258,8 @@ export const sendOTP = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: emailSent 
-        ? `OTP sent to ${isAdmin ? 'admin' : 'your'} email` 
-        : 'OTP generated (email sending failed)',
+        ? `✅ OTP sent to ${isAdmin ? 'admin' : 'your'} email` 
+        : '⚠️ OTP generated but email sending failed. Check logs.',
       data: {
         contact,
         type,
@@ -231,7 +274,8 @@ export const sendOTP = async (req, res) => {
     console.error('❌ Send OTP error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to send OTP'
+      message: 'Failed to send OTP',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -265,7 +309,6 @@ export const verifyOTP = async (req, res) => {
       let user = userResult.rows[0];
       
       if (!user) {
-        // Create user with admin role if admin
         const role = isAdmin ? 'admin' : 'user';
         const newUser = await pool.query(
           `INSERT INTO users (email, phone, name, role, created_at, updated_at)
@@ -420,7 +463,6 @@ export const resendOTP = async (req, res) => {
       [otp, expiresAt, contact]
     );
 
-    // Resend email
     if (contact.includes('@')) {
       await sendEmailOTP(contact, otp, isAdmin ? 'admin' : 'login');
     }
