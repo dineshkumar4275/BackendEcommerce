@@ -4,25 +4,22 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 
 // ============================================
-// ✅ CREATE EMAIL TRANSPORTER WITH DEBUG
+// ✅ EMAIL TRANSPORTER
 // ============================================
 let transporter = null;
 
 function getTransporter() {
   if (transporter) return transporter;
 
-  // ✅ Check if credentials exist
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_PASS;
 
-  console.log('📧 Email Config Check:');
-  console.log(`  EMAIL_USER: ${emailUser ? '✅ Set' : '❌ Missing'}`);
-  console.log(`  EMAIL_PASS: ${emailPass ? '✅ Set (length: ' + emailPass.length + ')' : '❌ Missing'}`);
+  console.log('📧 Email Config:');
+  console.log(`  EMAIL_USER: ${emailUser}`);
+  console.log(`  EMAIL_PASS: ${emailPass ? '✅ Set' : '❌ Missing'}`);
 
   if (!emailUser || !emailPass) {
-    console.error('❌ Email credentials missing. Please check .env file');
-    console.log('  Required: EMAIL_USER=your_email@gmail.com');
-    console.log('  Required: EMAIL_PASS=your_16_char_app_password');
+    console.error('❌ Email credentials missing');
     return null;
   }
 
@@ -35,62 +32,33 @@ function getTransporter() {
       },
       tls: {
         rejectUnauthorized: false
-      },
-      debug: true, // Enable debug
-      logger: true // Enable logging
+      }
     });
 
-    console.log('✅ Email transporter created successfully');
+    console.log('✅ Email transporter created');
     return transporter;
   } catch (error) {
-    console.error('❌ Failed to create email transporter:', error.message);
+    console.error('❌ Email config error:', error.message);
     return null;
   }
 }
 
 // ============================================
-// ✅ VERIFY EMAIL CONFIGURATION
-// ============================================
-async function verifyEmailConfig() {
-  try {
-    const transporter = getTransporter();
-    if (!transporter) {
-      console.log('❌ No transporter available');
-      return false;
-    }
-
-    // Verify connection
-    await transporter.verify();
-    console.log('✅ Email connection verified successfully');
-    return true;
-  } catch (error) {
-    console.error('❌ Email verification failed:', error.message);
-    return false;
-  }
-}
-
-// ============================================
-// ✅ SEND EMAIL OTP - COMPLETE WORKING VERSION
+// ✅ SEND EMAIL OTP
 // ============================================
 async function sendEmailOTP(email, otp, purpose = 'login') {
   try {
-    console.log(`📧 Attempting to send OTP to ${email}...`);
+    console.log(`📧 Sending OTP to ${email}...`);
     
     const transporter = getTransporter();
-    
     if (!transporter) {
       console.error('❌ No transporter available');
       return false;
     }
 
-    // Verify connection first
-    const isVerified = await verifyEmailConfig();
-    if (!isVerified) {
-      console.error('❌ Email connection not verified');
-      return false;
-    }
-
-    const isAdmin = email === 'admin@example.com';
+    // Check if this is the admin email
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+    const isAdmin = email === adminEmail;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -175,19 +143,13 @@ async function sendEmailOTP(email, otp, purpose = 'login') {
       text: `Your OTP is: ${otp}. Valid for 10 minutes.`
     };
 
-    console.log(`📧 Sending email to ${email}...`);
-    console.log(`  From: ${mailOptions.from}`);
-    console.log(`  Subject: ${mailOptions.subject}`);
-
     const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Email sent successfully!`);
+    console.log(`✅ OTP email sent to ${email}`);
     console.log(`  Message ID: ${info.messageId}`);
-    console.log(`  Response: ${info.response}`);
     return true;
 
   } catch (error) {
     console.error('❌ Email sending failed:', error.message);
-    console.error('  Error details:', error);
     return false;
   }
 }
@@ -214,8 +176,9 @@ export const sendOTP = async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // ✅ Check if admin
-    const isAdmin = contact === 'admin@example.com';
+    // ✅ Check if this is the admin email (from .env)
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+    const isAdmin = contact === adminEmail;
     
     console.log(`📱 Generated OTP for ${contact}: ${otp} ${isAdmin ? '(ADMIN)' : ''}`);
 
@@ -274,8 +237,7 @@ export const sendOTP = async (req, res) => {
     console.error('❌ Send OTP error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to send OTP',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Failed to send OTP'
     });
   }
 };
@@ -296,7 +258,8 @@ export const verifyOTP = async (req, res) => {
       });
     }
 
-    const isAdmin = contact === 'admin@example.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+    const isAdmin = contact === adminEmail;
 
     // ✅ DEVELOPMENT MODE - Accept any 6-digit OTP
     if (process.env.NODE_ENV === 'development') {
@@ -452,7 +415,8 @@ export const resendOTP = async (req, res) => {
       });
     }
 
-    const isAdmin = contact === 'admin@example.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+    const isAdmin = contact === adminEmail;
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
