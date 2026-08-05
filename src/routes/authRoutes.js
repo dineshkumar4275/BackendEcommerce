@@ -1,4 +1,4 @@
-// src/routes/authRoutes.js
+// backend/src/routes/authRoutes.js
 import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import {
@@ -12,8 +12,7 @@ import {
   verifyEmail,
   logout
 } from '../controllers/authController.js';
-
-// ✅ Import OTP controllers
+// ✅ Import OTP controllers - ADD THIS
 import {
   sendOTP,
   verifyOTP,
@@ -26,18 +25,18 @@ const router = express.Router();
 // ✅ PUBLIC ROUTES
 // ============================================
 
-// ✅ Authentication
+// Authentication
 router.post('/register', register);
 router.post('/login', login);
 router.post('/logout', logout);
 
-// ✅ Password
+// Password
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.get('/verify-email/:token', verifyEmail);
 
 // ============================================
-// ✅ OTP ROUTES
+// ✅ OTP ROUTES - ADD THESE
 // ============================================
 router.post('/send-otp', sendOTP);
 router.post('/verify-otp', verifyOTP);
