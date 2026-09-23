@@ -163,7 +163,51 @@ router.post('/update-push-token', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+// =========================
+// ACCEPT ORDER
+// =========================
+router.post('/accept-order/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { driverId } = req.body;
 
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: 'driverId required' });
+    }
+
+    // Check order exists
+    const check = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const order = check.rows[0];
+
+    if (order.driver_id) {
+      return res.status(400).json({ success: false, message: 'Order already assigned' });
+    }
+
+    // Assign driver
+    const result = await pool.query(
+      `UPDATE orders
+       SET driver_id = $1, status = 'accepted', updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [driverId, orderId]
+    );
+
+    console.log(`✅ Order ${orderId} accepted by driver ${driverId}`);
+
+    res.json({
+      success: true,
+      message: 'Order accepted successfully',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Accept order error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 // =========================
 // UPDATE AVAILABILITY
 // =========================
