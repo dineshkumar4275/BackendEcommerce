@@ -1,3 +1,537 @@
+// // // // routes/drivers.js
+// // // import express from 'express';
+// // // import pool from '../config/database.js';
+// // // import nodemailer from 'nodemailer';
+// // // import jwt from 'jsonwebtoken';
+
+// // // const router = express.Router();
+
+// // // const otpStore = new Map();
+
+// // // const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production';
+
+// // // // =========================
+// // // // SMTP / EMAIL CONFIG
+// // // // =========================
+// // // // Fall back to EMAIL_USER / EMAIL_PASS if SMTP_* vars are not set.
+// // // // This makes the code work with BOTH naming conventions.
+// // // const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+// // // const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
+// // // const SMTP_SECURE = String(process.env.SMTP_SECURE).toLowerCase() === 'true';
+// // // const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER;
+// // // const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+
+// // // // =========================
+// // // // EMAIL TRANSPORTER
+// // // // =========================
+// // // const transporter = nodemailer.createTransport({
+// // //   host: SMTP_HOST,
+// // //   port: SMTP_PORT,
+// // //   secure: SMTP_SECURE, // true for 465, false for 587
+// // //   auth: {
+// // //     user: SMTP_USER,
+// // //     pass: SMTP_PASS,
+// // //   },
+// // //   tls: {
+// // //     // Helps with some cloud hosts (Vercel, Render, etc.)
+// // //     rejectUnauthorized: false,
+// // //   },
+// // // });
+
+// // // // Verify SMTP on boot (helps debug quickly)
+// // // transporter.verify((err) => {
+// // //   if (err) {
+// // //     console.error('❌ SMTP verify failed:', err.message);
+// // //     console.error('   → Check EMAIL_USER / EMAIL_PASS (must be a Gmail App Password)');
+// // //     console.error('   → Check SMTP_HOST and SMTP_PORT');
+// // //   } else {
+// // //     console.log('✅ SMTP ready — emails will be sent from', SMTP_USER);
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // GENERATE OTP
+// // // // =========================
+// // // const generateOTP = () => {
+// // //   return Math.floor(100000 + Math.random() * 900000).toString();
+// // // };
+
+// // // // =========================
+// // // // ROOT
+// // // // =========================
+// // // router.get('/', (req, res) => {
+// // //   res.json({ success: true, message: 'Driver API Working' });
+// // // });
+
+// // // // =========================
+// // // // AVAILABLE ORDERS
+// // // // =========================
+// // // router.get('/available-orders', async (req, res) => {
+// // //   try {
+// // //     const result = await pool.query(`
+// // //       SELECT * FROM orders
+// // //       WHERE driver_id IS NULL
+// // //       ORDER BY created_at DESC
+// // //     `);
+// // //     res.json({ success: true, data: result.rows });
+// // //   } catch (error) {
+// // //     console.error('Available orders error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // MY ORDERS
+// // // // =========================
+// // // router.get('/my-orders', async (req, res) => {
+// // //   try {
+// // //     const driverId = req.query.driverId;
+// // //     if (!driverId) {
+// // //       return res.status(400).json({ success: false, message: 'driverId required' });
+// // //     }
+// // //     const result = await pool.query(`
+// // //       SELECT * FROM orders
+// // //       WHERE driver_id = $1
+// // //       ORDER BY created_at DESC
+// // //     `, [driverId]);
+// // //     res.json({ success: true, data: result.rows });
+// // //   } catch (error) {
+// // //     console.error('My orders error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // DRIVER EARNINGS
+// // // // =========================
+// // // router.get('/earnings', async (req, res) => {
+// // //   try {
+// // //     const driverId = req.query.driverId;
+// // //     if (!driverId) {
+// // //       return res.status(400).json({ success: false, message: 'driverId required' });
+// // //     }
+// // //     const result = await pool.query(`
+// // //       SELECT
+// // //         COUNT(*) AS total_orders,
+// // //         COALESCE(SUM(total_amount),0) AS total_earnings,
+// // //         COALESCE(SUM(CASE WHEN DATE(created_at) = CURRENT_DATE THEN total_amount ELSE 0 END),0) AS today_earnings,
+// // //         COUNT(CASE WHEN DATE(created_at) = CURRENT_DATE THEN 1 END) AS today_count
+// // //       FROM orders
+// // //       WHERE driver_id = $1 AND status = 'delivered'
+// // //     `, [driverId]);
+// // //     res.json({ success: true, data: result.rows[0] });
+// // //   } catch (error) {
+// // //     console.error('Earnings error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // GET ALL DRIVERS
+// // // // =========================
+// // // router.get('/all', async (req, res) => {
+// // //   try {
+// // //     const result = await pool.query(`SELECT * FROM drivers ORDER BY id DESC`);
+// // //     res.json({ success: true, data: result.rows });
+// // //   } catch (error) {
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // UPDATE PUSH TOKEN
+// // // // =========================
+// // // router.post('/update-push-token', async (req, res) => {
+// // //   try {
+// // //     const { driver_id, push_token } = req.body;
+// // //     if (!driver_id || !push_token) {
+// // //       return res.status(400).json({
+// // //         success: false,
+// // //         message: 'driver_id and push_token required',
+// // //       });
+// // //     }
+// // //     await pool.query(
+// // //       `UPDATE drivers
+// // //        SET push_token = $1, updated_at = NOW()
+// // //        WHERE id = $2 AND (push_token IS DISTINCT FROM $1 OR push_token IS NULL)`,
+// // //       [push_token, driver_id]
+// // //     );
+// // //     console.log(`✅ Push token updated for driver ${driver_id}`);
+// // //     res.json({ success: true, message: 'Push token saved successfully' });
+// // //   } catch (error) {
+// // //     console.error('Update push token error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+// // // // =========================
+// // // // ACCEPT ORDER
+// // // // =========================
+// // // router.post('/accept-order/:orderId', async (req, res) => {
+// // //   try {
+// // //     const { orderId } = req.params;
+// // //     const { driverId } = req.body;
+
+// // //     if (!driverId) {
+// // //       return res.status(400).json({ success: false, message: 'driverId required' });
+// // //     }
+
+// // //     // Check order exists
+// // //     const check = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
+// // //     if (check.rows.length === 0) {
+// // //       return res.status(404).json({ success: false, message: 'Order not found' });
+// // //     }
+
+// // //     const order = check.rows[0];
+
+// // //     if (order.driver_id) {
+// // //       return res.status(400).json({ success: false, message: 'Order already assigned' });
+// // //     }
+
+// // //     // Assign driver
+// // //     const result = await pool.query(
+// // //       `UPDATE orders
+// // //        SET driver_id = $1, status = 'accepted', updated_at = NOW()
+// // //        WHERE id = $2
+// // //        RETURNING *`,
+// // //       [driverId, orderId]
+// // //     );
+
+// // //     console.log(`✅ Order ${orderId} accepted by driver ${driverId}`);
+
+// // //     res.json({
+// // //       success: true,
+// // //       message: 'Order accepted successfully',
+// // //       data: result.rows[0],
+// // //     });
+// // //   } catch (error) {
+// // //     console.error('Accept order error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+// // // // =========================
+// // // // UPDATE AVAILABILITY
+// // // // =========================
+// // // router.post('/update-availability', async (req, res) => {
+// // //   try {
+// // //     const { driver_id, is_available } = req.body;
+// // //     await pool.query(
+// // //       `UPDATE drivers SET is_available = $1, updated_at = NOW() WHERE id = $2`,
+// // //       [is_available, driver_id]
+// // //     );
+// // //     console.log(`📱 Driver ${driver_id} availability: ${is_available ? 'ONLINE' : 'OFFLINE'}`);
+// // //     res.json({
+// // //       success: true,
+// // //       message: `Driver is now ${is_available ? 'online' : 'offline'}`,
+// // //     });
+// // //   } catch (error) {
+// // //     console.error('Update availability error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // GET DRIVER NOTIFICATIONS
+// // // // =========================
+// // // router.get('/:driverId/notifications', async (req, res) => {
+// // //   try {
+// // //     const { driverId } = req.params;
+// // //     const result = await pool.query(`
+// // //       SELECT * FROM driver_notifications
+// // //       WHERE driver_id = $1
+// // //       ORDER BY created_at DESC
+// // //       LIMIT 50
+// // //     `, [driverId]);
+// // //     res.json({ success: true, data: result.rows });
+// // //   } catch (error) {
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // SEND OTP (WITH EMAIL)
+// // // // =========================
+// // // router.post('/send-otp', async (req, res) => {
+// // //   try {
+// // //     const { email } = req.body;
+// // //     if (!email) {
+// // //       return res.status(400).json({ success: false, message: 'Email required' });
+// // //     }
+
+// // //     const cleanEmail = email.trim().toLowerCase();
+// // //     const otp = generateOTP();
+
+// // //     otpStore.set(cleanEmail, {
+// // //       otp,
+// // //       expiresAt: Date.now() + 10 * 60 * 1000,
+// // //     });
+
+// // //     console.log(`🔐 OTP for ${cleanEmail}: ${otp}`);
+
+// // //     // ===== SEND EMAIL =====
+// // //     try {
+// // //       await transporter.sendMail({
+// // //         from: `"Sombu" <${SMTP_USER}>`,
+// // //         to: cleanEmail,
+// // //         subject: 'Your Sombu Login OTP',
+// // //         text: `Your OTP is ${otp}. Valid for 10 minutes. Do not share with anyone.`,
+// // //         html: `
+// // //           <div style="font-family:sans-serif;padding:20px">
+// // //             <h2>Your Login OTP</h2>
+// // //             <p>Use this code to log in:</p>
+// // //             <h1 style="letter-spacing:6px;color:#FF9800">${otp}</h1>
+// // //             <p>Valid for 10 minutes. Do not share with anyone.</p>
+// // //           </div>
+// // //         `,
+// // //       });
+// // //       console.log(`✅ Email sent to ${cleanEmail}`);
+// // //     } catch (emailError) {
+// // //       console.error('❌ Email send failed:', emailError);
+// // //       return res.status(500).json({
+// // //         success: false,
+// // //         message: 'Failed to send email. Check SMTP config.',
+// // //         error: emailError.message, // helpful during debugging; remove in production
+// // //       });
+// // //     }
+
+// // //     res.json({
+// // //       success: true,
+// // //       message: 'OTP sent successfully',
+// // //       // devOTP: otp,  // ⚠️ REMOVE / COMMENT OUT IN PRODUCTION
+// // //     });
+// // //   } catch (error) {
+// // //     console.error('Send OTP error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // VERIFY OTP (WITH JWT TOKEN)
+// // // // =========================
+// // // router.post('/verify-otp', async (req, res) => {
+// // //   try {
+// // //     const { email, otp } = req.body;
+// // //     if (!email || !otp) {
+// // //       return res.status(400).json({ success: false, message: 'Email and OTP required' });
+// // //     }
+
+// // //     const cleanEmail = email.trim().toLowerCase();
+// // //     const record = otpStore.get(cleanEmail);
+
+// // //     if (!record) {
+// // //       return res.status(400).json({ success: false, message: 'OTP expired' });
+// // //     }
+// // //     if (record.otp !== otp) {
+// // //       return res.status(400).json({ success: false, message: 'Invalid OTP' });
+// // //     }
+
+// // //     otpStore.delete(cleanEmail);
+
+// // //     const result = await pool.query(`SELECT * FROM drivers WHERE email = $1`, [cleanEmail]);
+
+// // //     if (result.rows.length === 0) {
+// // //       return res.json({
+// // //         success: true,
+// // //         isNewUser: true,
+// // //         email: cleanEmail,
+// // //         message: 'New user — please register',
+// // //       });
+// // //     }
+
+// // //     const driver = result.rows[0];
+// // //     const token = jwt.sign(
+// // //       { driverId: driver.id, email: driver.email },
+// // //       JWT_SECRET,
+// // //       { expiresIn: '30d' }
+// // //     );
+
+// // //     res.json({
+// // //       success: true,
+// // //       isNewUser: false,
+// // //       token,
+// // //       driver,
+// // //     });
+// // //   } catch (error) {
+// // //     console.error('Verify OTP error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // CREATE DRIVER
+// // // // =========================
+// // // router.post('/', async (req, res) => {
+// // //   try {
+// // //     const { name, email, phone, vehicle_number, vehicle_type } = req.body;
+// // //     if (!name || !email) {
+// // //       return res.status(400).json({ success: false, message: 'Name and email required' });
+// // //     }
+
+// // //     const cleanEmail = email.trim().toLowerCase();
+
+// // //     const existing = await pool.query(`SELECT id FROM drivers WHERE email = $1`, [cleanEmail]);
+// // //     if (existing.rows.length > 0) {
+// // //       return res.status(400).json({ success: false, message: 'Driver already exists' });
+// // //     }
+
+// // //     const result = await pool.query(`
+// // //       INSERT INTO drivers
+// // //       (name, email, phone, vehicle_number, vehicle_type, is_available)
+// // //       VALUES ($1,$2,$3,$4,$5,$6)
+// // //       RETURNING *
+// // //     `, [
+// // //       name,
+// // //       cleanEmail,
+// // //       phone || null,
+// // //       vehicle_number || null,
+// // //       vehicle_type || 'bike',
+// // //       false,
+// // //     ]);
+
+// // //     const driver = result.rows[0];
+// // //     const token = jwt.sign(
+// // //       { driverId: driver.id, email: driver.email },
+// // //       JWT_SECRET,
+// // //       { expiresIn: '30d' }
+// // //     );
+
+// // //     res.status(201).json({
+// // //       success: true,
+// // //       token,
+// // //       driver,
+// // //       data: driver,
+// // //     });
+// // //   } catch (error) {
+// // //     console.error('Create driver error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // UPDATE LOCATION
+// // // // =========================
+// // // router.post('/update-location', async (req, res) => {
+// // //   try {
+// // //     const { driverId, latitude, longitude } = req.body;
+// // //     await pool.query(`
+// // //       UPDATE drivers
+// // //       SET current_latitude = $1, current_longitude = $2, last_location_update = NOW()
+// // //       WHERE id = $3
+// // //     `, [latitude, longitude, driverId]);
+// // //     res.json({ success: true, message: 'Location updated' });
+// // //   } catch (error) {
+// // //     console.error('Update location error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =====================================
+// // // // SPECIFIC :id SUB-ROUTES MUST COME
+// // // // BEFORE THE GENERIC /:id ROUTE
+// // // // =====================================
+
+// // // // =========================
+// // // // GET DRIVER STATS
+// // // // =========================
+// // // router.get('/:id/stats', async (req, res) => {
+// // //   try {
+// // //     const { id } = req.params;
+
+// // //     const result = await pool.query(`
+// // //       SELECT
+// // //         COUNT(*) FILTER (WHERE status = 'delivered') AS total_delivered,
+// // //         COUNT(*) FILTER (WHERE status = 'pending')   AS total_pending,
+// // //         COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) AS today_orders,
+// // //         COALESCE(SUM(total_amount) FILTER (WHERE status = 'delivered'), 0) AS total_earnings
+// // //       FROM orders
+// // //       WHERE driver_id = $1
+// // //     `, [id]);
+
+// // //     res.json({ success: true, data: result.rows[0] });
+// // //   } catch (error) {
+// // //     console.error('Driver stats error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // TODAY PERFORMANCE
+// // // // =========================
+// // // router.get('/:id/today-performance', async (req, res) => {
+// // //   try {
+// // //     const { id } = req.params;
+// // //     const result = await pool.query(`
+// // //       SELECT
+// // //         COUNT(*) AS today_orders,
+// // //         COALESCE(SUM(total_amount),0) AS today_earnings
+// // //       FROM orders
+// // //       WHERE driver_id = $1 AND DATE(created_at) = CURRENT_DATE
+// // //     `, [id]);
+// // //     res.json({ success: true, data: result.rows[0] });
+// // //   } catch (error) {
+// // //     console.error('Today performance error:', error);
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // GET DRIVER BY ID
+// // // // =========================
+// // // router.get('/:id', async (req, res) => {
+// // //   try {
+// // //     const { id } = req.params;
+// // //     const result = await pool.query(`SELECT * FROM drivers WHERE id = $1`, [id]);
+// // //     if (result.rows.length === 0) {
+// // //       return res.status(404).json({ success: false, message: 'Driver not found' });
+// // //     }
+// // //     res.json({ success: true, data: result.rows[0] });
+// // //   } catch (error) {
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // UPDATE DRIVER
+// // // // =========================
+// // // router.put('/:id', async (req, res) => {
+// // //   try {
+// // //     const { id } = req.params;
+// // //     const { name, email, phone, vehicle_number, vehicle_type, is_active, is_available } = req.body;
+
+// // //     const result = await pool.query(`
+// // //       UPDATE drivers
+// // //       SET
+// // //         name = COALESCE($1, name),
+// // //         email = COALESCE($2, email),
+// // //         phone = COALESCE($3, phone),
+// // //         vehicle_number = COALESCE($4, vehicle_number),
+// // //         vehicle_type = COALESCE($5, vehicle_type),
+// // //         is_active = COALESCE($6, is_active),
+// // //         is_available = COALESCE($7, is_available),
+// // //         updated_at = NOW()
+// // //       WHERE id = $8
+// // //       RETURNING *
+// // //     `, [name, email, phone, vehicle_number, vehicle_type, is_active, is_available, id]);
+
+// // //     res.json({ success: true, data: result.rows[0] });
+// // //   } catch (error) {
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // // =========================
+// // // // DELETE DRIVER
+// // // // =========================
+// // // router.delete('/:id', async (req, res) => {
+// // //   try {
+// // //     const { id } = req.params;
+// // //     await pool.query(`DELETE FROM drivers WHERE id = $1`, [id]);
+// // //     res.json({ success: true, message: 'Driver deleted' });
+// // //   } catch (error) {
+// // //     res.status(500).json({ success: false, message: error.message });
+// // //   }
+// // // });
+
+// // // export default router;
 // // // routes/drivers.js
 // // import express from 'express';
 // // import pool from '../config/database.js';
@@ -13,8 +547,6 @@
 // // // =========================
 // // // SMTP / EMAIL CONFIG
 // // // =========================
-// // // Fall back to EMAIL_USER / EMAIL_PASS if SMTP_* vars are not set.
-// // // This makes the code work with BOTH naming conventions.
 // // const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 // // const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 // // const SMTP_SECURE = String(process.env.SMTP_SECURE).toLowerCase() === 'true';
@@ -27,23 +559,15 @@
 // // const transporter = nodemailer.createTransport({
 // //   host: SMTP_HOST,
 // //   port: SMTP_PORT,
-// //   secure: SMTP_SECURE, // true for 465, false for 587
-// //   auth: {
-// //     user: SMTP_USER,
-// //     pass: SMTP_PASS,
-// //   },
-// //   tls: {
-// //     // Helps with some cloud hosts (Vercel, Render, etc.)
-// //     rejectUnauthorized: false,
-// //   },
+// //   secure: SMTP_SECURE,
+// //   auth: { user: SMTP_USER, pass: SMTP_PASS },
+// //   tls: { rejectUnauthorized: false },
 // // });
 
-// // // Verify SMTP on boot (helps debug quickly)
 // // transporter.verify((err) => {
 // //   if (err) {
 // //     console.error('❌ SMTP verify failed:', err.message);
 // //     console.error('   → Check EMAIL_USER / EMAIL_PASS (must be a Gmail App Password)');
-// //     console.error('   → Check SMTP_HOST and SMTP_PORT');
 // //   } else {
 // //     console.log('✅ SMTP ready — emails will be sent from', SMTP_USER);
 // //   }
@@ -52,9 +576,8 @@
 // // // =========================
 // // // GENERATE OTP
 // // // =========================
-// // const generateOTP = () => {
-// //   return Math.floor(100000 + Math.random() * 900000).toString();
-// // };
+// // const generateOTP = () =>
+// //   Math.floor(100000 + Math.random() * 900000).toString();
 
 // // // =========================
 // // // ROOT
@@ -163,6 +686,7 @@
 // //     res.status(500).json({ success: false, message: error.message });
 // //   }
 // // });
+
 // // // =========================
 // // // ACCEPT ORDER
 // // // =========================
@@ -175,19 +699,16 @@
 // //       return res.status(400).json({ success: false, message: 'driverId required' });
 // //     }
 
-// //     // Check order exists
 // //     const check = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
 // //     if (check.rows.length === 0) {
 // //       return res.status(404).json({ success: false, message: 'Order not found' });
 // //     }
 
 // //     const order = check.rows[0];
-
 // //     if (order.driver_id) {
 // //       return res.status(400).json({ success: false, message: 'Order already assigned' });
 // //     }
 
-// //     // Assign driver
 // //     const result = await pool.query(
 // //       `UPDATE orders
 // //        SET driver_id = $1, status = 'accepted', updated_at = NOW()
@@ -197,7 +718,6 @@
 // //     );
 
 // //     console.log(`✅ Order ${orderId} accepted by driver ${driverId}`);
-
 // //     res.json({
 // //       success: true,
 // //       message: 'Order accepted successfully',
@@ -208,6 +728,61 @@
 // //     res.status(500).json({ success: false, message: error.message });
 // //   }
 // // });
+
+// // // =========================
+// // // GET ORDER BY ID ← NEW (for order details screen)
+// // // =========================
+// // router.get('/order/:orderId', async (req, res) => {
+// //   try {
+// //     const { orderId } = req.params;
+
+// //     const result = await pool.query(
+// //       `SELECT * FROM orders WHERE id = $1`,
+// //       [orderId]
+// //     );
+
+// //     if (result.rows.length === 0) {
+// //       return res.status(404).json({ success: false, message: 'Order not found' });
+// //     }
+
+// //     res.json({ success: true, data: result.rows[0] });
+// //   } catch (error) {
+// //     console.error('Get order error:', error);
+// //     res.status(500).json({ success: false, message: error.message });
+// //   }
+// // });
+
+// // // =========================
+// // // UPDATE ORDER STATUS ← optional but useful
+// // // =========================
+// // router.put('/order/:orderId/status', async (req, res) => {
+// //   try {
+// //     const { orderId } = req.params;
+// //     const { status } = req.body;
+
+// //     if (!status) {
+// //       return res.status(400).json({ success: false, message: 'status required' });
+// //     }
+
+// //     const result = await pool.query(
+// //       `UPDATE orders
+// //        SET status = $1, updated_at = NOW()
+// //        WHERE id = $2
+// //        RETURNING *`,
+// //       [status, orderId]
+// //     );
+
+// //     if (result.rows.length === 0) {
+// //       return res.status(404).json({ success: false, message: 'Order not found' });
+// //     }
+
+// //     res.json({ success: true, data: result.rows[0] });
+// //   } catch (error) {
+// //     console.error('Update order status error:', error);
+// //     res.status(500).json({ success: false, message: error.message });
+// //   }
+// // });
+
 // // // =========================
 // // // UPDATE AVAILABILITY
 // // // =========================
@@ -267,7 +842,6 @@
 
 // //     console.log(`🔐 OTP for ${cleanEmail}: ${otp}`);
 
-// //     // ===== SEND EMAIL =====
 // //     try {
 // //       await transporter.sendMail({
 // //         from: `"Sombu" <${SMTP_USER}>`,
@@ -289,14 +863,13 @@
 // //       return res.status(500).json({
 // //         success: false,
 // //         message: 'Failed to send email. Check SMTP config.',
-// //         error: emailError.message, // helpful during debugging; remove in production
+// //         error: emailError.message,
 // //       });
 // //     }
 
 // //     res.json({
 // //       success: true,
 // //       message: 'OTP sent successfully',
-// //       // devOTP: otp,  // ⚠️ REMOVE / COMMENT OUT IN PRODUCTION
 // //     });
 // //   } catch (error) {
 // //     console.error('Send OTP error:', error);
@@ -425,17 +998,13 @@
 // // });
 
 // // // =====================================
-// // // SPECIFIC :id SUB-ROUTES MUST COME
-// // // BEFORE THE GENERIC /:id ROUTE
+// // // SPECIFIC :id SUB-ROUTES BEFORE /:id
 // // // =====================================
 
-// // // =========================
 // // // GET DRIVER STATS
-// // // =========================
 // // router.get('/:id/stats', async (req, res) => {
 // //   try {
 // //     const { id } = req.params;
-
 // //     const result = await pool.query(`
 // //       SELECT
 // //         COUNT(*) FILTER (WHERE status = 'delivered') AS total_delivered,
@@ -445,7 +1014,6 @@
 // //       FROM orders
 // //       WHERE driver_id = $1
 // //     `, [id]);
-
 // //     res.json({ success: true, data: result.rows[0] });
 // //   } catch (error) {
 // //     console.error('Driver stats error:', error);
@@ -453,9 +1021,7 @@
 // //   }
 // // });
 
-// // // =========================
 // // // TODAY PERFORMANCE
-// // // =========================
 // // router.get('/:id/today-performance', async (req, res) => {
 // //   try {
 // //     const { id } = req.params;
@@ -473,9 +1039,7 @@
 // //   }
 // // });
 
-// // // =========================
 // // // GET DRIVER BY ID
-// // // =========================
 // // router.get('/:id', async (req, res) => {
 // //   try {
 // //     const { id } = req.params;
@@ -489,9 +1053,7 @@
 // //   }
 // // });
 
-// // // =========================
 // // // UPDATE DRIVER
-// // // =========================
 // // router.put('/:id', async (req, res) => {
 // //   try {
 // //     const { id } = req.params;
@@ -518,9 +1080,7 @@
 // //   }
 // // });
 
-// // // =========================
 // // // DELETE DRIVER
-// // // =========================
 // // router.delete('/:id', async (req, res) => {
 // //   try {
 // //     const { id } = req.params;
@@ -541,6 +1101,7 @@
 // const router = express.Router();
 
 // const otpStore = new Map();
+// const deliveryOtpStore = new Map();
 
 // const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production';
 
@@ -567,7 +1128,6 @@
 // transporter.verify((err) => {
 //   if (err) {
 //     console.error('❌ SMTP verify failed:', err.message);
-//     console.error('   → Check EMAIL_USER / EMAIL_PASS (must be a Gmail App Password)');
 //   } else {
 //     console.log('✅ SMTP ready — emails will be sent from', SMTP_USER);
 //   }
@@ -578,6 +1138,9 @@
 // // =========================
 // const generateOTP = () =>
 //   Math.floor(100000 + Math.random() * 900000).toString();
+
+// const generateDeliveryOTP = () =>
+//   Math.floor(1000 + Math.random() * 9000).toString();
 
 // // =========================
 // // ROOT
@@ -730,16 +1293,12 @@
 // });
 
 // // =========================
-// // GET ORDER BY ID ← NEW (for order details screen)
+// // GET ORDER BY ID
 // // =========================
 // router.get('/order/:orderId', async (req, res) => {
 //   try {
 //     const { orderId } = req.params;
-
-//     const result = await pool.query(
-//       `SELECT * FROM orders WHERE id = $1`,
-//       [orderId]
-//     );
+//     const result = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
 
 //     if (result.rows.length === 0) {
 //       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -753,15 +1312,20 @@
 // });
 
 // // =========================
-// // UPDATE ORDER STATUS ← optional but useful
+// // UPDATE ORDER STATUS
+// // status: picked_up | out_for_delivery | delivered
 // // =========================
 // router.put('/order/:orderId/status', async (req, res) => {
 //   try {
 //     const { orderId } = req.params;
 //     const { status } = req.body;
 
-//     if (!status) {
-//       return res.status(400).json({ success: false, message: 'status required' });
+//     const validStatuses = ['picked_up', 'out_for_delivery', 'delivered'];
+//     if (!status || !validStatuses.includes(status)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `status must be one of: ${validStatuses.join(', ')}`,
+//       });
 //     }
 
 //     const result = await pool.query(
@@ -776,9 +1340,115 @@
 //       return res.status(404).json({ success: false, message: 'Order not found' });
 //     }
 
+//     console.log(`✅ Order ${orderId} status → ${status}`);
 //     res.json({ success: true, data: result.rows[0] });
 //   } catch (error) {
 //     console.error('Update order status error:', error);
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// });
+
+// // =========================
+// // SEND DELIVERY OTP (to customer)
+// // =========================
+// router.post('/order/:orderId/send-delivery-otp', async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+
+//     const result = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
+
+//     if (result.rows.length === 0) {
+//       return res.status(404).json({ success: false, message: 'Order not found' });
+//     }
+
+//     const order = result.rows[0];
+//     const customerEmail = order.customer_email;
+//     const otp = generateDeliveryOTP();
+
+//     deliveryOtpStore.set(String(orderId), {
+//       otp,
+//       expiresAt: Date.now() + 10 * 60 * 1000,
+//     });
+
+//     console.log(`🔐 Delivery OTP for order ${orderId}: ${otp}`);
+
+//     if (customerEmail) {
+//       try {
+//         await transporter.sendMail({
+//           from: `"Sombu Delivery" <${SMTP_USER}>`,
+//           to: customerEmail,
+//           subject: `Your delivery OTP for order #${order.order_number}`,
+//           text: `Your delivery OTP is ${otp}. Share this with the delivery partner.`,
+//           html: `
+//             <div style="font-family:sans-serif;padding:20px">
+//               <h2>Delivery OTP</h2>
+//               <p>Order #${order.order_number}</p>
+//               <h1 style="letter-spacing:6px;color:#FF9800">${otp}</h1>
+//               <p>Share this OTP with your delivery partner to confirm delivery.</p>
+//             </div>
+//           `,
+//         });
+//         console.log(`✅ Delivery OTP emailed to ${customerEmail}`);
+//       } catch (emailError) {
+//         console.error('❌ Delivery OTP email failed:', emailError.message);
+//       }
+//     }
+
+//     res.json({
+//       success: true,
+//       message: 'Delivery OTP sent to customer',
+//     });
+//   } catch (error) {
+//     console.error('Send delivery OTP error:', error);
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// });
+
+// // =========================
+// // VERIFY DELIVERY OTP + MARK DELIVERED
+// // =========================
+// router.post('/order/:orderId/verify-delivery-otp', async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+//     const { otp } = req.body;
+
+//     if (!otp) {
+//       return res.status(400).json({ success: false, message: 'OTP required' });
+//     }
+
+//     const record = deliveryOtpStore.get(String(orderId));
+
+//     if (!record) {
+//       return res.status(400).json({ success: false, message: 'No OTP requested for this order' });
+//     }
+
+//     if (Date.now() > record.expiresAt) {
+//       deliveryOtpStore.delete(String(orderId));
+//       return res.status(400).json({ success: false, message: 'OTP expired' });
+//     }
+
+//     if (record.otp !== String(otp)) {
+//       return res.status(400).json({ success: false, message: 'Invalid OTP' });
+//     }
+
+//     deliveryOtpStore.delete(String(orderId));
+
+//     const result = await pool.query(
+//       `UPDATE orders
+//        SET status = 'delivered', delivered_at = NOW(), updated_at = NOW()
+//        WHERE id = $1
+//        RETURNING *`,
+//       [orderId]
+//     );
+
+//     console.log(`✅ Order ${orderId} delivered (OTP verified)`);
+//     res.json({
+//       success: true,
+//       message: 'Delivery confirmed',
+//       data: result.rows[0],
+//     });
+//   } catch (error) {
+//     console.error('Verify delivery OTP error:', error);
 //     res.status(500).json({ success: false, message: error.message });
 //   }
 // });
@@ -823,7 +1493,7 @@
 // });
 
 // // =========================
-// // SEND OTP (WITH EMAIL)
+// // SEND OTP (LOGIN)
 // // =========================
 // router.post('/send-otp', async (req, res) => {
 //   try {
@@ -878,7 +1548,7 @@
 // });
 
 // // =========================
-// // VERIFY OTP (WITH JWT TOKEN)
+// // VERIFY OTP (LOGIN)
 // // =========================
 // router.post('/verify-otp', async (req, res) => {
 //   try {
@@ -1114,9 +1784,6 @@ const SMTP_SECURE = String(process.env.SMTP_SECURE).toLowerCase() === 'true';
 const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER;
 const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS;
 
-// =========================
-// EMAIL TRANSPORTER
-// =========================
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
@@ -1134,7 +1801,7 @@ transporter.verify((err) => {
 });
 
 // =========================
-// GENERATE OTP
+// OTP GENERATORS
 // =========================
 const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -1208,6 +1875,47 @@ router.get('/earnings', async (req, res) => {
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Earnings error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
+// TRIP SUMMARY (NEW)
+// =========================
+router.get('/trip-summary', async (req, res) => {
+  try {
+    const driverId = req.query.driverId;
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: 'driverId required' });
+    }
+
+    const today = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'delivered') AS delivered_today,
+        COUNT(*) FILTER (WHERE status IN ('picked_up', 'out_for_delivery')) AS in_progress_today,
+        COALESCE(SUM(total_amount) FILTER (WHERE status = 'delivered'), 0) AS earnings_today,
+        COALESCE(SUM(delivery_fee) FILTER (WHERE status = 'delivered'), 0) AS delivery_fees_today
+      FROM orders
+      WHERE driver_id = $1 AND DATE(created_at) = CURRENT_DATE
+    `, [driverId]);
+
+    const week = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'delivered') AS delivered_week,
+        COALESCE(SUM(total_amount) FILTER (WHERE status = 'delivered'), 0) AS earnings_week
+      FROM orders
+      WHERE driver_id = $1 AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+    `, [driverId]);
+
+    res.json({
+      success: true,
+      data: {
+        today: today.rows[0],
+        week: week.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error('Trip summary error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -1293,6 +2001,38 @@ router.post('/accept-order/:orderId', async (req, res) => {
 });
 
 // =========================
+// REJECT ORDER (NEW)
+// =========================
+router.post('/reject-order/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { driverId, reason } = req.body;
+
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: 'driverId required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET reject_reason = $1, rejected_at = NOW(), updated_at = NOW()
+       WHERE id = $2 AND (driver_id IS NULL OR driver_id = $3)
+       RETURNING *`,
+      [reason || 'Not specified', orderId, driverId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order not found or already assigned' });
+    }
+
+    console.log(`❌ Order ${orderId} rejected by driver ${driverId}: ${reason}`);
+    res.json({ success: true, message: 'Order rejected', data: result.rows[0] });
+  } catch (error) {
+    console.error('Reject order error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
 // GET ORDER BY ID
 // =========================
 router.get('/order/:orderId', async (req, res) => {
@@ -1313,7 +2053,6 @@ router.get('/order/:orderId', async (req, res) => {
 
 // =========================
 // UPDATE ORDER STATUS
-// status: picked_up | out_for_delivery | delivered
 // =========================
 router.put('/order/:orderId/status', async (req, res) => {
   try {
@@ -1349,7 +2088,176 @@ router.put('/order/:orderId/status', async (req, res) => {
 });
 
 // =========================
-// SEND DELIVERY OTP (to customer)
+// UPLOAD PROOF OF DELIVERY (NEW)
+// =========================
+router.post('/order/:orderId/proof', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { photo_url, notes } = req.body;
+
+    if (!photo_url) {
+      return res.status(400).json({ success: false, message: 'photo_url required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET proof_photo_url = $1, delivery_notes = $2, updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [photo_url, notes || null, orderId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    console.log(`📸 Proof of delivery saved for order ${orderId}`);
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Proof upload error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
+// COLLECT CASH ON DELIVERY (NEW)
+// =========================
+router.post('/order/:orderId/collect-cash', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { cod_amount } = req.body;
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET cod_amount = $1, cod_collected = true, updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [cod_amount || 0, orderId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    console.log(`💰 COD collected for order ${orderId}: ₹${cod_amount}`);
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('COD collect error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
+// CUSTOMER RATING (NEW)
+// =========================
+router.post('/order/:orderId/rate', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { rating, comment } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, message: 'rating 1-5 required' });
+    }
+
+    // Update order with customer rating
+    const orderResult = await pool.query(
+      `UPDATE orders
+       SET customer_rating = $1, customer_rating_comment = $2, rated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [rating, comment || null, orderId]
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Update driver's average rating
+    const driverId = orderResult.rows[0].driver_id;
+    if (driverId) {
+      await pool.query(`
+        UPDATE drivers
+        SET total_rating = (
+          SELECT COALESCE(AVG(customer_rating), 5.0)
+          FROM orders
+          WHERE driver_id = $1 AND customer_rating IS NOT NULL
+        ),
+        total_ratings_count = (
+          SELECT COUNT(*) FROM orders
+          WHERE driver_id = $1 AND customer_rating IS NOT NULL
+        )
+        WHERE id = $1
+      `, [driverId]);
+    }
+
+    console.log(`⭐ Order ${orderId} rated: ${rating}/5`);
+    res.json({ success: true, data: orderResult.rows[0] });
+  } catch (error) {
+    console.error('Rating error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
+// DRIVER RATING SUMMARY (NEW)
+// =========================
+router.get('/:id/rating', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`
+      SELECT
+        COALESCE(AVG(customer_rating), 5.0) AS avg_rating,
+        COUNT(*) FILTER (WHERE customer_rating IS NOT NULL) AS total_ratings,
+        COUNT(*) FILTER (WHERE customer_rating = 5) AS five_star,
+        COUNT(*) FILTER (WHERE customer_rating = 4) AS four_star,
+        COUNT(*) FILTER (WHERE customer_rating = 3) AS three_star,
+        COUNT(*) FILTER (WHERE customer_rating = 2) AS two_star,
+        COUNT(*) FILTER (WHERE customer_rating = 1) AS one_star
+      FROM orders
+      WHERE driver_id = $1
+    `, [id]);
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Rating summary error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
+// BREAK MODE (NEW)
+// =========================
+router.post('/break-mode', async (req, res) => {
+  try {
+    const { driverId, isOnBreak } = req.body;
+
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: 'driverId required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE drivers
+       SET is_on_break = $1,
+           break_started_at = CASE WHEN $1 = true THEN NOW() ELSE NULL END,
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, is_on_break, break_started_at`,
+      [isOnBreak === true, driverId]
+    );
+
+    console.log(`☕ Driver ${driverId} break: ${isOnBreak ? 'ON' : 'OFF'}`);
+    res.json({
+      success: true,
+      message: isOnBreak ? 'Break mode ON' : 'Break mode OFF',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Break mode error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
+// SEND DELIVERY OTP
 // =========================
 router.post('/order/:orderId/send-delivery-otp', async (req, res) => {
   try {
@@ -1378,13 +2286,12 @@ router.post('/order/:orderId/send-delivery-otp', async (req, res) => {
           from: `"Sombu Delivery" <${SMTP_USER}>`,
           to: customerEmail,
           subject: `Your delivery OTP for order #${order.order_number}`,
-          text: `Your delivery OTP is ${otp}. Share this with the delivery partner.`,
+          text: `Your delivery OTP is ${otp}. Share with the delivery partner.`,
           html: `
             <div style="font-family:sans-serif;padding:20px">
               <h2>Delivery OTP</h2>
               <p>Order #${order.order_number}</p>
               <h1 style="letter-spacing:6px;color:#FF9800">${otp}</h1>
-              <p>Share this OTP with your delivery partner to confirm delivery.</p>
             </div>
           `,
         });
@@ -1394,10 +2301,7 @@ router.post('/order/:orderId/send-delivery-otp', async (req, res) => {
       }
     }
 
-    res.json({
-      success: true,
-      message: 'Delivery OTP sent to customer',
-    });
+    res.json({ success: true, message: 'Delivery OTP sent to customer' });
   } catch (error) {
     console.error('Send delivery OTP error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -1405,7 +2309,7 @@ router.post('/order/:orderId/send-delivery-otp', async (req, res) => {
 });
 
 // =========================
-// VERIFY DELIVERY OTP + MARK DELIVERED
+// VERIFY DELIVERY OTP
 // =========================
 router.post('/order/:orderId/verify-delivery-otp', async (req, res) => {
   try {
@@ -1419,7 +2323,7 @@ router.post('/order/:orderId/verify-delivery-otp', async (req, res) => {
     const record = deliveryOtpStore.get(String(orderId));
 
     if (!record) {
-      return res.status(400).json({ success: false, message: 'No OTP requested for this order' });
+      return res.status(400).json({ success: false, message: 'No OTP requested' });
     }
 
     if (Date.now() > record.expiresAt) {
@@ -1442,11 +2346,7 @@ router.post('/order/:orderId/verify-delivery-otp', async (req, res) => {
     );
 
     console.log(`✅ Order ${orderId} delivered (OTP verified)`);
-    res.json({
-      success: true,
-      message: 'Delivery confirmed',
-      data: result.rows[0],
-    });
+    res.json({ success: true, message: 'Delivery confirmed', data: result.rows[0] });
   } catch (error) {
     console.error('Verify delivery OTP error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -1517,13 +2417,12 @@ router.post('/send-otp', async (req, res) => {
         from: `"Sombu" <${SMTP_USER}>`,
         to: cleanEmail,
         subject: 'Your Sombu Login OTP',
-        text: `Your OTP is ${otp}. Valid for 10 minutes. Do not share with anyone.`,
+        text: `Your OTP is ${otp}. Valid for 10 minutes.`,
         html: `
           <div style="font-family:sans-serif;padding:20px">
             <h2>Your Login OTP</h2>
-            <p>Use this code to log in:</p>
             <h1 style="letter-spacing:6px;color:#FF9800">${otp}</h1>
-            <p>Valid for 10 minutes. Do not share with anyone.</p>
+            <p>Valid for 10 minutes. Do not share.</p>
           </div>
         `,
       });
@@ -1537,10 +2436,7 @@ router.post('/send-otp', async (req, res) => {
       });
     }
 
-    res.json({
-      success: true,
-      message: 'OTP sent successfully',
-    });
+    res.json({ success: true, message: 'OTP sent successfully' });
   } catch (error) {
     console.error('Send OTP error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -1587,12 +2483,7 @@ router.post('/verify-otp', async (req, res) => {
       { expiresIn: '30d' }
     );
 
-    res.json({
-      success: true,
-      isNewUser: false,
-      token,
-      driver,
-    });
+    res.json({ success: true, isNewUser: false, token, driver });
   } catch (error) {
     console.error('Verify OTP error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -1637,12 +2528,7 @@ router.post('/', async (req, res) => {
       { expiresIn: '30d' }
     );
 
-    res.status(201).json({
-      success: true,
-      token,
-      driver,
-      data: driver,
-    });
+    res.status(201).json({ success: true, token, driver, data: driver });
   } catch (error) {
     console.error('Create driver error:', error);
     res.status(500).json({ success: false, message: error.message });
