@@ -1880,7 +1880,7 @@ router.get('/earnings', async (req, res) => {
 });
 
 // =========================
-// TRIP SUMMARY (NEW)
+// TRIP SUMMARY
 // =========================
 router.get('/trip-summary', async (req, res) => {
   try {
@@ -2001,7 +2001,7 @@ router.post('/accept-order/:orderId', async (req, res) => {
 });
 
 // =========================
-// REJECT ORDER (NEW)
+// REJECT ORDER
 // =========================
 router.post('/reject-order/:orderId', async (req, res) => {
   try {
@@ -2088,7 +2088,7 @@ router.put('/order/:orderId/status', async (req, res) => {
 });
 
 // =========================
-// UPLOAD PROOF OF DELIVERY (NEW)
+// UPLOAD PROOF OF DELIVERY
 // =========================
 router.post('/order/:orderId/proof', async (req, res) => {
   try {
@@ -2120,7 +2120,7 @@ router.post('/order/:orderId/proof', async (req, res) => {
 });
 
 // =========================
-// COLLECT CASH ON DELIVERY (NEW)
+// COLLECT CASH ON DELIVERY
 // =========================
 router.post('/order/:orderId/collect-cash', async (req, res) => {
   try {
@@ -2148,7 +2148,7 @@ router.post('/order/:orderId/collect-cash', async (req, res) => {
 });
 
 // =========================
-// CUSTOMER RATING (NEW)
+// CUSTOMER RATING
 // =========================
 router.post('/order/:orderId/rate', async (req, res) => {
   try {
@@ -2159,7 +2159,6 @@ router.post('/order/:orderId/rate', async (req, res) => {
       return res.status(400).json({ success: false, message: 'rating 1-5 required' });
     }
 
-    // Update order with customer rating
     const orderResult = await pool.query(
       `UPDATE orders
        SET customer_rating = $1, customer_rating_comment = $2, rated_at = NOW()
@@ -2172,7 +2171,6 @@ router.post('/order/:orderId/rate', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Update driver's average rating
     const driverId = orderResult.rows[0].driver_id;
     if (driverId) {
       await pool.query(`
@@ -2199,7 +2197,7 @@ router.post('/order/:orderId/rate', async (req, res) => {
 });
 
 // =========================
-// DRIVER RATING SUMMARY (NEW)
+// DRIVER RATING SUMMARY
 // =========================
 router.get('/:id/rating', async (req, res) => {
   try {
@@ -2224,7 +2222,7 @@ router.get('/:id/rating', async (req, res) => {
 });
 
 // =========================
-// BREAK MODE (NEW)
+// BREAK MODE
 // =========================
 router.post('/break-mode', async (req, res) => {
   try {
@@ -2388,6 +2386,25 @@ router.get('/:driverId/notifications', async (req, res) => {
     `, [driverId]);
     res.json({ success: true, data: result.rows });
   } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =========================
+// CLEAR ALL DRIVER NOTIFICATIONS ← NEW
+// =========================
+router.delete('/:driverId/notifications', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    await pool.query(
+      `DELETE FROM driver_notifications WHERE driver_id = $1`,
+      [driverId]
+    );
+    console.log(`🗑️ Cleared all notifications for driver ${driverId}`);
+    res.json({ success: true, message: 'Notifications cleared' });
+  } catch (error) {
+    console.error('Clear notifications error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
